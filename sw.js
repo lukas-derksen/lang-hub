@@ -4,7 +4,7 @@
 // - Everything else in SHELL: precached on install and served cache first.
 // Bump VERSION whenever a shell file changes (CI checks this on pull requests).
 // A new version waits until the user taps "Reload" in the app (no auto skipWaiting).
-const VERSION = 'v11';
+const VERSION = 'v12';
 const CACHE = `langhub-${VERSION}`;
 const NETWORK_TIMEOUT = 3000;
 const SHELL = [
@@ -40,8 +40,11 @@ self.addEventListener('install', (e) => {
     // cache: 'reload' skips the browser's HTTP cache (GitHub Pages sends max-age=600),
     // so a new version is never filled with files from the old one.
     await c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })));
-    // One-time migration: v7 pages can't show the "Reload" prompt, so take over directly.
-    if (await caches.has('langhub-v7')) self.skipWaiting();
+    // Migration: pages from v7 and older can't show the "Reload" prompt (they only say
+    // "it will load next time", which never happens while the app stays in memory), so
+    // take over directly when one of their caches is still here.
+    const keys = await caches.keys();
+    if (keys.some((k) => /^langhub-v[1-7]$/.test(k))) self.skipWaiting();
   })());
 });
 
