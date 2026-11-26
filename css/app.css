@@ -302,3 +302,17 @@ mark { background: var(--red-soft); color: var(--red); border-radius: 4px; paddi
   body { padding: 0; background: #fff; color: #000; }
   .report { border: 0; box-shadow: none; }
 }
+
+/* data safety: save-failure banner and toast actions */
+.data-banner {
+  width: calc(100% - 32px); max-width: 608px; margin: 8px auto 0; padding: 12px 14px; border-radius: 12px;
+  background: var(--red-soft); color: var(--text); border: 1px solid var(--red);
+  display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center;
+}
+.data-banner p { margin: 0; flex: 1 1 16em; }
+#toast.has-action { pointer-events: auto; }
+.toast-action {
+  background: none; border: 0; color: inherit; font: inherit; font-weight: 700;
+  text-decoration: underline; cursor: pointer; padding: 4px 0 4px 8px; min-height: 32px;
+}
+@media print { .data-banner { display: none; } }
