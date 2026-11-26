@@ -508,7 +508,7 @@ render();
 // itself during a live call: the reload waits until the call screen is closed.
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   const sw = navigator.serviceWorker;
-  const inCall = () => document.body.classList.contains('in-call');
+  const inCall = () => document.body.classList.contains('in-call') || document.body.classList.contains('has-call-bar');
   let reg = null, wantReload = false, reloading = false, lastCheck = Date.now();
 
   const reloadWhenFree = () => {

@@ -426,3 +426,19 @@ export function logDrill(d) {
   if (state.drills.length > 1000) state.drills.length = 1000;
   save();
 }
+
+// ---- coach: daily budget ----
+/** Coach minutes allowed per day (0 = no limit). */
+export function coachDailyMinutes() {
+  const v = state.settings.coachDailyMinutes;
+  return Number.isFinite(v) && v >= 0 ? v : 30;
+}
+export function setCoachDailyMinutes(n) {
+  state.settings.coachDailyMinutes = Math.max(0, Math.min(600, Math.round(Number(n) || 0)));
+  save();
+}
+/** Coach call seconds logged today (on this device). */
+export function callSecondsToday() {
+  const today = dayKey();
+  return state.calls.filter((c) => dayKey(new Date(c.at)) === today).reduce((a, c) => a + (c.seconds || 0), 0);
+}

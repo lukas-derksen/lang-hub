@@ -42,7 +42,10 @@ Progress is stored in the browser's `localStorage` on each device. Use **Setting
 - **Coach voice** (Settings): pick one of the Italian voices in `js/languages.js` (`coach.voices`), or a different voice each call. The coach's name and home town follow the voice. The agent allows the client to override `tts.voice_id` for this.
 - The agent id, persona and wrap-up message live in `js/languages.js`; scenes, conversation cards and articles in `content/it/`.
 - Calls stop on their own at the scene's time limit, and the agent hangs up after 45 seconds of silence. The agent itself allows one call at a time and 15 calls a day.
-- The ElevenLabs browser SDK is vendored in `vendor/` (v1.35.0) so the app needs no build step.
+- Calls last at most 20 minutes (`MAX_CALL_MINUTES` in `js/coach.js`). Each call asks the server for its own cap (`conversation.max_duration_seconds` override, the activity limit + 30 s); without it the agent cuts calls at 600 s.
+- **Coach minutes per day** (Settings, default 30, 0 = no limit) blocks new calls once today's calls reach it. With fewer than 5,000 credits left (last reading) the app asks before starting a call.
+- The ElevenLabs browser SDK is vendored in `vendor/` (v1.35.0) so the app needs no build step. It carries one small patch, marked "Lang Hub patch", that forwards `overrides.conversation.maxDurationSeconds`, which 1.35.0 drops.
+- `TESTING.md` has a 10 minute checklist for real calls.
 
 ## Listening
 

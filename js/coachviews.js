@@ -29,17 +29,30 @@ let contentPromise = null;
 function loadContent() {
   contentPromise ||= Promise.all(['scenes', 'cards', 'articles'].map((n) =>
     fetch(`${H.L().content}${n}.json`).then((r) => { if (!r.ok) throw new Error(n); return r.json(); })))
-    .then(([scenes, cards, articles]) => { Object.assign(content, { scenes, cards, articles }); })
-    .catch(() => { content.error = 'Could not load the exercises. Open the app once while online, then reload.'; })
+    .then(([scenes, cards, articles]) => { Object.assign(content, { scenes, cards, articles, error: null }); })
+    .catch(() => {
+      // Forget the failed attempt so "Try again" (or coming back online) can retry.
+      contentPromise = null;
+      content.error = 'Could not load the exercises. Check your connection and try again.';
+    })
     .finally(() => H.render());
   return contentPromise;
 }
 function ready() {
   if (content.scenes) return true;
-  loadContent();
+  if (!content.error) loadContent(); // after a failure, wait for a retry instead of looping
   return false;
 }
-const loading = () => `<div class="card"><p class="muted">${content.error || 'Loading…'}</p></div>`;
+function retryContent() {
+  if (content.scenes) return;
+  content.error = null;
+  loadContent();
+  H.render();
+}
+window.addEventListener('online', () => { if (content.error) retryContent(); });
+const loading = () => (content.error
+  ? `<div class="card"><p class="muted">${esc(content.error)}</p><button class="btn btn-ghost" data-action="retry-content">Try again</button></div>`
+  : '<div class="card"><p class="muted">Loading…</p></div>');
 
 // ---------- shared bits ----------
 function keyMissingCard() {
@@ -49,6 +62,24 @@ function keyMissingCard() {
     <a class="btn btn-primary" href="#/settings">Add key in Settings</a>
   </div>`;
 }
+
+// Daily coach budget (Settings → Coach minutes per day). 0 = no limit.
+function budget() {
+  const limit = store.coachDailyMinutes();
+  const used = store.callSecondsToday();
+  return { limit, usedMin: Math.round(used / 60), reached: limit > 0 && used >= limit * 60, near: limit > 0 && used >= limit * 60 * 0.8 };
+}
+function budgetCard() {
+  const b = budget();
+  if (b.reached) return `<div class="card notice warn">
+    <h3>Coach time used up for today</h3>
+    <p>You've had ${b.usedMin} of your ${b.limit} coach minutes today. New calls are possible again tomorrow, or raise the limit in <a href="#/settings">Settings</a>.</p>
+  </div>`;
+  if (b.near) return `<p class="pill">${b.usedMin} of ${b.limit} coach minutes used today</p>`;
+  return '';
+}
+/** Whether a new call may start (key present and daily budget left). */
+const canCall = () => !!store.getApiKey() && !budget().reached;
 
 export function usageCard() {
   const min = Math.round(store.callSecondsThisMonth() / 60);
@@ -60,6 +91,10 @@ export function usageCard() {
 }
 
 let usageCache = null;
+const LOW_CREDITS = 5000;
+/** Credits left from the last credit reading, or null if there is none. */
+const creditsLeft = () => (usageCache?.u ? Math.max(0, usageCache.u.limit - usageCache.u.used) : null);
+
 export async function fillUsage(force = false) {
   const el = document.getElementById('credit-meter');
   if (!el || !store.getApiKey()) return;
@@ -73,28 +108,30 @@ export async function fillUsage(force = false) {
       <p class="small"><strong>${left.toLocaleString('en-GB')}</strong> of ${u.limit.toLocaleString('en-GB')} ElevenLabs credits left${u.resetsAt ? `, resets ${u.resetsAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''}.</p>`;
   } catch (e) {
     usageCache = null;
-    el.innerHTML = `<p class="muted small">${esc(e.message)}</p>`;
+    const msg = e.code === 'missing_permissions' ? 'Add User: read to your API key to see your ElevenLabs credits here.' : e.message;
+    el.innerHTML = `<p class="muted small">${esc(msg)}</p>`;
   }
 }
 
 // ---------- Speak ----------
 export function viewSpeak() {
   const hasKey = !!store.getApiKey();
+  const ok = canCall();
   return `
   <section class="page-head">
     <p class="eyebrow">${H.L().name}</p>
     <h1>🗣 Speaking</h1>
     <p class="muted">Talk out loud with ${coachName()}. They keep the conversation going and quietly notes your mistakes for the recap.</p>
   </section>
-  ${hasKey ? '' : keyMissingCard()}
+  ${hasKey ? budgetCard() : keyMissingCard()}
   ${!ready() ? loading() : `
   <h2 class="section-title">Pick a conversation</h2>
   <div class="scene-grid">${content.scenes.map((sc) => `
-    <button class="scene card" data-action="call-scene" data-id="${sc.id}" ${hasKey ? '' : 'disabled'}>
+    <button class="scene card" data-action="call-scene" data-id="${sc.id}" ${ok ? '' : 'disabled'}>
       <span class="scene-ico" aria-hidden="true">${sc.icon}</span>
       <strong>${esc(sc.title)}</strong>
       <span class="muted small">${esc(sc.subtitle)}</span>
-      <span class="muted small">up to ${sc.minutes} min</span>
+      <span class="muted small">up to ${Math.min(sc.minutes, coach.MAX_CALL_MINUTES)} min</span>
     </button>`).join('')}
   </div>
   <a class="card extra-row" href="#/cards">
@@ -117,18 +154,20 @@ export function viewCards() {
     <h1>🃏 Conversation cards</h1>
     <p class="muted">${coachName()} reads a card, you answer. Quick cards need a sentence or two; "talk about it" cards get follow-up questions. Tap <em>Next card</em> when you're ready to move on.</p>
   </section>
-  ${hasKey ? '' : keyMissingCard()}
+  ${hasKey ? budgetCard() : keyMissingCard()}
   <div class="card">
     <h3>How many cards?</h3>
     <div class="days" role="radiogroup" aria-label="Number of cards">${[10, 15, 20].map((n) => `
       <label class="day-chip"><input type="radio" name="cardcount" value="${n}" ${n === cardCount ? 'checked' : ''}><span>${n}</span></label>`).join('')}
     </div>
-    <p class="muted small">About ${Math.round(cardCount * 1.2)} min of conversation. Calls stop automatically after ${cardLimit()} min.</p>
+    <p class="muted small">About ${cardMinutes()} min of conversation. Calls stop automatically after ${cardLimit()} min${cardMinutes() > cardLimit() - 2 ? ' (the longest call), so you may not get through every card' : ''}.</p>
     <div id="credit-meter">${hasKey ? '<p class="muted small">Checking ElevenLabs credits…</p>' : ''}</div>
-    <button class="btn btn-primary" data-action="call-cards" ${hasKey && ready() ? '' : 'disabled'}>Start with ${cardCount} cards</button>
+    <button class="btn btn-primary" data-action="call-cards" ${canCall() && ready() ? '' : 'disabled'}>Start with ${cardCount} cards</button>
   </div>`;
 }
-const cardLimit = () => Math.round(cardCount * 1.5) + 2;
+const cardMinutes = () => Math.round(cardCount * 1.2);
+// About 1.5 min per card plus a bit, never longer than the longest call.
+const cardLimit = () => Math.min(coach.MAX_CALL_MINUTES, Math.round(cardCount * 1.5) + 2);
 
 function drawCards(n) {
   const quick = shuffle(content.cards.filter((c) => c.type === 'quick'));
@@ -152,7 +191,7 @@ export function viewRead(id) {
     <p class="muted">Read an article with some depth, then talk it through with ${coachName()} to check you understood the meaning, not just the words.</p>
   </section>
   ${readDay ? '<p class="pill">Today is a reading day: this replaces your speaking block.</p>' : ''}
-  ${hasKey ? '' : keyMissingCard()}
+  ${hasKey ? budgetCard() : keyMissingCard()}
   <div class="article-list">${content.articles.map((a) => {
     const done = store.get().calls.some((c) => c.mode === 'read' && c.ref === a.id);
     return `<a class="card article-row" href="#/read/${a.id}">
@@ -183,7 +222,9 @@ function articleView(id) {
   <div class="card notice">
     <h3>Now talk about it</h3>
     <p>${coachName()} will ask you to sum it up, check the main points and ask what you think. Try not to look back at the text.</p>
-    ${hasKey ? `<button class="btn btn-primary" data-action="call-read" data-id="${a.id}">Discuss with ${coachName()}</button>` : '<a class="btn btn-primary" href="#/settings">Add API key to discuss</a>'}
+    ${!hasKey ? '<a class="btn btn-primary" href="#/settings">Add API key to discuss</a>'
+    : canCall() ? `<button class="btn btn-primary" data-action="call-read" data-id="${a.id}">Discuss with ${coachName()}</button>`
+    : '<p class="muted small">Your coach minutes for today are used up. Raise the limit in <a href="#/settings">Settings</a>, or come back tomorrow.</p>'}
   </div>`;
 }
 
@@ -233,45 +274,123 @@ function personaFor(v, prompt) {
   return prompt.replace('{name}', v.name).replace('{city}', v.city).replace('{gender}', v.gender === 'male' ? 'a man' : 'a woman');
 }
 
-async function startCall({ mode, title, ref, prompt, firstMessage, maxMinutes, skill, cards }) {
+const routeName = () => (location.hash.replace(/^#\/?/, '') || 'today').split(/[/?]/)[0];
+const isAppText = (t) => /^\s*\[APP\]/.test(t || ''); // our own instructions to the coach, never shown
+
+async function startCall(opts) {
   if (call) return;
+  if (budget().reached) { H.toast('You\'ve used your coach minutes for today. You can change the limit in Settings.'); return; }
+  const left = creditsLeft();
+  if (!opts.confirmed && left !== null && left < LOW_CREDITS) { askLowCredits(opts, left); return; }
+  const { mode, title, ref, skill, cards } = opts;
+  let { prompt, firstMessage } = opts;
+  const maxMinutes = Math.min(opts.maxMinutes, coach.MAX_CALL_MINUTES);
   store.stopTimer(); // calls log their own time
   const voice = pickVoice();
   lastVoiceKey = voice?.key;
   if (voice) { prompt = personaFor(voice, prompt); firstMessage = firstMessage.replace(/\bElena\b/g, voice.name); }
-  call = { voice, mode, title, ref, skill, status: 'starting', aiMode: 'listening', started: null, messages: [], mistakes: [], cards, cardIndex: 0, subtitles: false, maxMinutes };
+  const me = { voice, mode, title, ref, skill, status: 'starting', aiMode: 'listening', started: null, messages: [], mistakes: [], cards, cardIndex: 0, subtitles: false, maxMinutes, abort: new AbortController() };
+  call = me;
+  // Callbacks only act while this call is still the current one (not cancelled or replaced).
+  const live = () => call === me;
   location.hash = '#/call';
   try {
-    call.ctrl = await coach.startCall({
+    const ctrl = await coach.startCall({
       agentId: H.L().coach.agentId,
       prompt, firstMessage, voiceId: voice?.id,
       maxSeconds: maxMinutes * 60,
       wrapUp: H.L().coach.wrapUp,
-      onStatus: (st) => { if (!call) return; call.status = st; if (st === 'connected') call.started = Date.now(); updateCall(); },
-      onMode: (m) => { if (!call) return; call.aiMode = m; updateCall(); },
-      onMessage: (m) => { if (!call || !m?.message || m.message.startsWith('[APP]')) return; call.messages.push({ who: m.role === 'user' || m.source === 'user' ? 'you' : 'coach', text: m.message }); updateCall(); },
-      onMistake: (p) => { if (!call) return; const item = store.addMistake(p, call.title); if (item) { call.mistakes.push(item); updateCall(); } },
-      onError: (msg) => H.toast(msg),
-      onEnd: ({ seconds }) => endCall(seconds),
+      signal: me.abort.signal,
+      onStatus: (st) => { if (!live()) return; me.status = st; if (st === 'connected' && !me.started) me.started = Date.now(); updateCall(); updateBar(); },
+      onMode: (m) => { if (!live()) return; me.aiMode = m; updateCall(); },
+      onMessage: (m) => { if (!live() || !m?.message || isAppText(m.message)) return; me.messages.push({ who: m.role === 'user' || m.source === 'user' ? 'you' : 'coach', text: m.message }); updateCall(); },
+      onMistake: (p) => { if (!live()) return; const item = store.addMistake(p, me.title); if (item) { me.mistakes.push(item); updateCall(); } },
+      onError: (msg) => { if (live()) H.toast(msg); },
+      onEnd: ({ seconds, error }) => endCall(me, seconds, error),
     });
+    if (!ctrl || !live()) return; // cancelled while connecting: the session was closed
+    me.ctrl = ctrl;
+    updateCall(); updateBar();
   } catch (e) {
-    call = null;
-    H.toast(e.message || 'Could not start the call.');
-    history.back();
+    dropCall(me, e.message || 'Could not start the call.');
   }
 }
 
-function endCall(seconds) {
-  if (!call) return;
-  const c = call;
+/** A call that never got going (cancelled, refused, failed): nothing is logged. */
+function dropCall(c, msg) {
+  if (call !== c) return;
+  c.abort.abort();
   call = null;
-  const secs = c.started ? Math.round((Date.now() - c.started) / 1000) : Math.min(seconds, 5);
+  updateBar();
+  if (msg) H.toast(msg);
+  if (routeName() === 'call') history.back();
+}
+
+/** End or cancel the current call, from the call screen, the call bar or when the page closes. */
+function hangUp() {
+  if (!call) return;
+  if (call.ctrl) call.ctrl.end(); // reports the end synchronously → endCall
+  else dropCall(call, 'Call cancelled.');
+}
+
+function endCall(c, seconds, error = '') {
+  if (call !== c) return;
+  const secs = c.started ? Math.round((Date.now() - c.started) / 1000) : 0;
+  // Refused or cut off before anything happened: show why, and don't count it as a call.
+  if (!c.started || (error && secs < 10 && !c.messages.length)) { dropCall(c, error || 'The call could not connect.'); return; }
+  call = null;
   if (secs > 0) store.addSeconds(store.dayKey(), c.skill, secs);
   store.logCall({ mode: c.mode, title: c.title, ref: c.ref, seconds: secs, mistakes: c.mistakes.length });
-  lastRecap = { title: c.title, mode: c.mode, seconds: secs, mistakes: c.mistakes, messages: c.messages, cardsDone: c.cards ? c.cardIndex + 1 : null, cardsTotal: c.cards?.length };
+  lastRecap = { title: c.title, mode: c.mode, seconds: secs, mistakes: c.mistakes, messages: c.messages, cardsDone: c.cards ? c.cardIndex + 1 : null, cardsTotal: c.cards?.length, dropped: error || '' };
   usageCache = null;
+  updateBar();
   location.hash = '#/recap';
 }
+
+// ---------- "call in progress" bar on other screens ----------
+function updateBar() {
+  let el = document.getElementById('call-bar');
+  if (!call || routeName() === 'call') {
+    el?.remove();
+    document.body.classList.remove('has-call-bar');
+    return;
+  }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'call-bar';
+    el.className = 'call-bar';
+    el.setAttribute('role', 'status');
+    document.body.appendChild(el);
+  }
+  document.body.classList.add('has-call-bar');
+  el.innerHTML = `<span class="call-bar-text"><strong>${call.ctrl ? 'Call in progress' : 'Connecting…'}</strong> · ${esc(call.title)}</span>
+    <a class="btn btn-primary" href="#/call">Return</a>
+    <button class="btn btn-danger" data-action="end-call">End</button>`;
+}
+
+// ---------- low credits: confirm before starting ----------
+let pendingStart = null;
+function askLowCredits(opts, left) {
+  closeSheet();
+  pendingStart = opts;
+  const el = document.createElement('div');
+  el.id = 'confirm-sheet';
+  el.className = 'sheet';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-modal', 'true');
+  el.setAttribute('aria-labelledby', 'confirm-title');
+  el.innerHTML = `<div class="card sheet-card">
+    <h3 id="confirm-title">Only ${left.toLocaleString('en-GB')} ElevenLabs credits left</h3>
+    <p class="muted">The call may stop early when your credits run out. Start anyway?</p>
+    <div class="row">
+      <button class="btn btn-primary" data-action="confirm-start">Start anyway</button>
+      <button class="btn btn-ghost" data-action="confirm-cancel">Cancel</button>
+    </div>
+  </div>`;
+  document.body.appendChild(el);
+  el.querySelector('[data-action=confirm-start]').focus();
+}
+function closeSheet() { pendingStart = null; document.getElementById('confirm-sheet')?.remove(); }
 
 export function viewCall() {
   if (!call) { setTimeout(() => { location.hash = lastRecap ? '#/recap' : '#/speak'; }); return ''; }
@@ -332,6 +451,7 @@ export function viewRecap() {
     <h1>${r.mistakes.length ? 'Bravo! Here\'s what to fix' : 'Bravo!'}</h1>
     <p class="muted">${esc(r.title)} · ${H.mmss(r.seconds)} min${r.cardsTotal ? ` · ${r.cardsDone} of ${r.cardsTotal} cards` : ''} · added to your ${r.mode === 'read' ? 'reading' : 'speaking'} time.</p>
   </section>
+  ${r.dropped ? `<div class="card notice warn"><p><strong>The call dropped.</strong> ${esc(r.dropped)}</p><p class="muted small">The time until then still counts.</p></div>` : ''}
   ${r.mistakes.length
     ? `<div class="mistakes">${r.mistakes.map(mistakeRow).join('')}</div><p class="muted small">Say each correct version out loud once. They're saved in Review.</p>`
     : `<div class="card"><p>${coachName()} didn't note any clear mistakes this time${r.seconds < 90 ? ' (it was a short call)' : ''}.</p></div>`}
@@ -341,13 +461,15 @@ export function viewRecap() {
 }
 
 // ---------- settings ----------
+let keyNote = ''; // result of the last "Save and test"
 export function settingsCard() {
   const key = store.getApiKey();
   return `<form class="card" id="coach-form" autocomplete="off">
     <h3>Coach (ElevenLabs)</h3>
     <p class="muted">Your API key is stored only on this device. It's never part of the app's code or your backup file.</p>
-    <label class="stack"><span>API key</span>
-      <input type="password" name="key" value="${esc(key)}" placeholder="sk_…" spellcheck="false" autocapitalize="off"></label>
+    ${key ? `<p class="small" id="key-status"><strong>Key saved</strong> · ends in <code>${esc(key.slice(-4))}</code></p>` : ''}
+    <label class="stack"><span>${key ? 'Replace key' : 'API key'}</span>
+      <input type="password" name="key" value="" placeholder="${key ? 'Paste a new key to replace' : 'sk_…'}" spellcheck="false" autocapitalize="off" autocomplete="off"></label>
     <details class="small"><summary>How to make a safe key</summary>
       <ol>
         <li>In ElevenLabs, go to <em>Developers → API keys → Create key</em>.</li>
@@ -359,7 +481,19 @@ export function settingsCard() {
       <button class="btn btn-primary" type="submit">Save and test</button>
       ${key ? '<button class="btn btn-ghost" type="button" data-action="forget-key">Remove key</button>' : ''}
     </div>
+    ${keyNote ? `<p class="small" id="key-note">${esc(keyNote)}</p>` : ''}
     <div id="credit-meter"></div>
+  </form>
+  <form class="card" id="budget-form">
+    <h3>Coach time per day</h3>
+    <p class="muted">A daily cap on live calls, to keep your ElevenLabs credits in check. New calls can't start once it's reached. 0 means no limit.</p>
+    <label class="field">
+      <span>Coach minutes per day</span>
+      <input type="number" name="minutes" min="0" max="600" step="5" value="${store.coachDailyMinutes()}" inputmode="numeric">
+      <span class="muted">min</span>
+    </label>
+    <p class="muted small">Today: ${Math.round(store.callSecondsToday() / 60)} min of calls so far.</p>
+    <button class="btn btn-primary" type="submit">Save</button>
   </form>
   ${voices().length > 1 ? `<div class="card">
     <h3>Coach voice</h3>
@@ -412,6 +546,7 @@ ${ar.paragraphs.join('\n\n')}`) });
 The deck for this call, in order:
 ${cards.map((c, i) => `${i + 1}. [${c.type === 'deep' ? 'talk about it' : 'quick'}] ${c.text}`).join('\n')}`) });
   } else if (a === 'next-card' && call?.cards) {
+    // say() sends a user message (not a contextual update), so the coach answers by reading the card.
     if (call.cardIndex >= call.cards.length - 1) {
       call.ctrl?.say('[APP] That was the last card. Thank the learner, give one sentence of encouragement and say goodbye.');
       btn.disabled = true;
@@ -423,17 +558,27 @@ ${cards.map((c, i) => `${i + 1}. [${c.type === 'deep' ? 'talk about it' : 'quick
     }
   } else if (a === 'end-call') {
     btn.disabled = true;
-    call?.ctrl ? call.ctrl.end() : endCall(0);
+    hangUp();
+  } else if (a === 'confirm-start' && pendingStart) {
+    const opts = pendingStart;
+    closeSheet();
+    startCall({ ...opts, confirmed: true });
+  } else if (a === 'confirm-cancel') {
+    closeSheet();
+  } else if (a === 'retry-content') {
+    retryContent();
   } else if (a === 'toggle-subs' && call) {
     call.subtitles = !call.subtitles; updateCall();
   } else if (a === 'del-mistake') {
     store.deleteMistake(btn.dataset.id); H.render();
   } else if (a === 'forget-key') {
-    store.setApiKey(''); usageCache = null; H.toast('Key removed from this device.'); H.render();
+    store.setApiKey(''); usageCache = null; keyNote = ''; H.toast('Key removed from this device.'); H.render();
   }
 });
 
 export function bind(r) {
+  closeSheet();
+  updateBar();
   if (r === 'call') updateCall();
   if (r === 'cards') {
     fillUsage();
@@ -447,16 +592,37 @@ export function bind(r) {
     if (store.getApiKey()) fillUsage();
     document.getElementById('coach-form')?.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const key = new FormData(e.target).get('key').trim();
-      store.setApiKey(key);
+      const btn = e.target.querySelector('[type=submit]');
+      // An empty field keeps the saved key (Remove key deletes it).
+      const typed = String(new FormData(e.target).get('key') || '').trim();
+      if (typed) store.setApiKey(typed);
+      const key = store.getApiKey();
+      if (!key) { H.toast('Paste your ElevenLabs API key first.'); return; }
       usageCache = null;
-      if (!key) { H.toast('Key removed.'); H.render(); return; }
-      H.toast('Key saved. Testing…');
-      await fillUsage(true);
-      if (usageCache) H.toast('Key works ✓');
+      btn.disabled = true;
+      H.toast(typed ? 'Key saved. Testing…' : 'Testing your key…');
+      try {
+        // Test what calls need (a signed URL for the agent); credits are a bonus.
+        const t = await coach.testKey(key, H.L().coach.agentId);
+        if (t.usage) usageCache = { t: Date.now(), u: t.usage };
+        keyNote = t.usageError || 'Key works for calls ✓';
+        H.toast(t.usageError ? 'Key works for calls ✓' : 'Key works ✓');
+      } catch (err) {
+        keyNote = err.message;
+        H.toast(err.message);
+      }
+      H.render();
+    });
+    document.getElementById('budget-form')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      store.setCoachDailyMinutes(new FormData(e.target).get('minutes'));
+      const m = store.coachDailyMinutes();
+      H.toast(m ? `Coach calls limited to ${m} min a day.` : 'No daily limit on coach calls.');
+      H.render();
     });
   }
 }
 
-// Warn before closing the page mid-call.
+// Warn before closing the page mid-call, and never leave a call running in a page that is gone.
 window.addEventListener('beforeunload', (e) => { if (call) { e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('pagehide', () => hangUp());

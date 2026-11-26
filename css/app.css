@@ -325,5 +325,22 @@ mark { background: var(--red-soft); color: var(--red); border-radius: 4px; paddi
   background: var(--text); color: var(--bg); padding: 8px 8px 8px 16px; border-radius: 12px; font-weight: 600;
 }
 #update-banner .btn { min-height: 36px; padding: 0 14px; }
-body.in-call #update-banner { display: none; }
+body.in-call #update-banner, body.has-call-bar #update-banner { display: none; }
 @media print { #update-banner { display: none !important; } }
+
+/* ---- call safety: bar while a call runs elsewhere, confirm sheet ---- */
+.notice.warn { border-color: var(--red); background: var(--red-soft); }
+.call-bar {
+  position: fixed; left: 8px; right: 8px; z-index: 9;
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 8px);
+  max-width: 624px; margin: 0 auto;
+  display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 14px;
+  background: var(--surface); border: 2px solid var(--accent); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.call-bar-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .9rem; }
+.call-bar .btn { min-height: 40px; padding: 6px 12px; }
+body.has-call-bar { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 84px); }
+body.has-call-bar #toast { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 80px); }
+.sheet { position: fixed; inset: 0; z-index: 20; display: grid; place-items: end center; padding: 16px; background: rgba(0, 0, 0, .35); }
+.sheet-card { width: 100%; max-width: 480px; margin: 0 0 env(safe-area-inset-bottom); }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
