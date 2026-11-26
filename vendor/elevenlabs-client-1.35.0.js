@@ -26718,7 +26718,11 @@ var ElevenLabsClient = (function(exports) {
 				clone_strength: config.overrides.tts?.cloneStrength
 			},
 			...config.overrides.asr?.keywords !== void 0 ? { asr: { keywords: config.overrides.asr.keywords } } : {},
-			conversation: { text_only: config.overrides.conversation?.textOnly }
+			conversation: {
+				text_only: config.overrides.conversation?.textOnly,
+				// Lang Hub patch: forward the max call length override (not supported by 1.35.0 itself).
+				max_duration_seconds: config.overrides.conversation?.maxDurationSeconds
+			}
 		};
 		if (config.customLlmExtraBody) overridesEvent.custom_llm_extra_body = config.customLlmExtraBody;
 		if (config.dynamicVariables) overridesEvent.dynamic_variables = config.dynamicVariables;

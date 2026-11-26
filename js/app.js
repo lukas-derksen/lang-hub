@@ -23,12 +23,34 @@ function greeting() {
   return g.evening;
 }
 
-function toast(msg) {
+/** toast(msg) or toast(msg, { action: 'Undo', onAction, ms }) for a toast with a button. */
+function toast(msg, { action, onAction, ms } = {}) {
   const el = document.getElementById('toast');
   el.textContent = msg;
+  el.classList.toggle('has-action', !!action);
+  if (action) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'toast-action';
+    b.textContent = action;
+    b.addEventListener('click', () => { el.classList.remove('show'); clearTimeout(toast.t); onAction?.(); });
+    el.append(' ', b);
+  }
   el.classList.add('show');
   clearTimeout(toast.t);
-  toast.t = setTimeout(() => el.classList.remove('show'), 3200);
+  toast.t = setTimeout(() => el.classList.remove('show'), ms || (action ? 8000 : 3200));
+}
+
+const DAY = 864e5;
+const ago = (t) => { const n = Math.floor((Date.now() - t) / DAY); return n <= 0 ? 'today' : n === 1 ? 'yesterday' : `${n} days ago`; };
+const kb = (b) => (b < 1e6 ? `${Math.max(1, Math.round(b / 1e3))} KB` : b < 1e9 ? `${(b / 1e6).toFixed(1)} MB` : `${(b / 1e9).toFixed(1)} GB`);
+
+function download(name, text) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 function ring(pct, size = 132, stroke = 12) {
@@ -99,6 +121,7 @@ function viewToday() {
       <div class="ring-label"><strong data-live="total">${mins(total)}</strong><span>/ ${mins(target)} min</span></div>
     </div>
   </section>
+  ${backupReminder()}
 
   <h2 class="section-title">Today's session</h2>
   <div class="blocks">${order.map((k) => blockCard(k)).join('')}</div>
@@ -106,6 +129,21 @@ function viewToday() {
 
   ${weekStrip()}
   `;
+}
+
+/** Nudge on Today: no export in 14 days, at least 7 days practised, not snoozed this week. */
+function backupReminder() {
+  const s = store.get().settings, now = Date.now();
+  if (now - (s.lastExport || 0) < 14 * DAY || now - (s.backupNudgeAt || 0) < 7 * DAY) return '';
+  const practised = Object.keys(store.get().days).filter((k) => store.totalSeconds(store.daySeconds(k)) > 0).length;
+  if (practised < 7) return '';
+  return `<div class="card notice backup-nudge">
+    <p><strong>Back up your progress.</strong> ${s.lastExport ? `Last backup: ${ago(s.lastExport)}.` : 'You haven’t exported a backup yet.'} It’s stored only on this device.</p>
+    <div class="row">
+      <button class="btn btn-primary" data-action="export">Export now</button>
+      <button class="btn btn-ghost" data-action="backup-snooze">Not now</button>
+    </div>
+  </div>`;
 }
 
 function weekStrip() {
@@ -225,14 +263,8 @@ function viewSettings() {
     <button class="btn btn-primary" type="submit">Save</button>
   </form>
   ${coachViews.settingsCard()}
-  <div class="card">
-    <h3>Backup</h3>
-    <p class="muted">Your progress is stored only on this device. Export it now and then, or to move to another device.</p>
-    <div class="row">
-      <button class="btn btn-ghost" data-action="export">Export</button>
-      <label class="btn btn-ghost">Import<input type="file" accept="application/json,.json" id="import-file" hidden></label>
-    </div>
-  </div>
+  ${damagedCard()}
+  ${backupCard()}
   <div class="card">
     <h3>Add time manually</h3>
     <p class="muted">Practised without the app, for example during your lesson with your tutor? Log it here for today.</p>
@@ -247,6 +279,86 @@ function viewSettings() {
     <button class="btn btn-danger" data-action="reset">Delete all progress</button>
   </div>
   <p class="muted center small">Lang Hub · all 4 steps</p>`;
+}
+
+const persistText = (p) => (p === 'persisted' ? '🔒 Protected from automatic clearing.'
+  : p ? 'Browser may clear this data; export regularly.' : 'Checking storage protection…');
+
+function backupCard() {
+  const last = store.get().settings.lastExport;
+  return `<div class="card">
+    <h3>Backup</h3>
+    <p class="muted">Your progress is stored only on this device. Export it now and then, or to move to another device.</p>
+    <p class="small"><span id="persist-status">${esc(persistText(store.health().persisted))}</span><br>
+      Last backup: <strong>${last ? ago(last) : 'never'}</strong><br>
+      <span class="muted" id="storage-use"></span></p>
+    <div class="row">
+      <button class="btn btn-ghost" data-action="export">Export</button>
+      <label class="btn btn-ghost">Import<input type="file" accept="application/json,.json" id="import-file" hidden></label>
+    </div>
+  </div>`;
+}
+
+/** Saved progress that couldn't be read at start; the damaged text is kept for recovery. */
+function damagedCard() {
+  const h = store.health();
+  const inMemory = h.corrupt && !h.corrupt.preserved;
+  const keys = store.corruptCopies();
+  if (!inMemory && !keys.length) return '';
+  const row = (key, label) => `<div class="row">
+      <span>${esc(label)}</span>
+      <button class="btn btn-ghost" data-action="corrupt-download" data-key="${esc(key)}">Download damaged data</button>
+      ${key ? `<button class="btn btn-danger" data-action="corrupt-delete" data-key="${esc(key)}">Delete</button>` : ''}
+    </div>`;
+  return `<div class="card notice" id="damaged-card">
+    <h3>Damaged data found</h3>
+    <p class="muted">Saved progress on this device couldn’t be read, so the app started fresh. The damaged data is kept here unchanged. Download it to keep it safe; it may be repairable by hand. Then import a backup if you have one.</p>
+    ${inMemory ? row('', 'Not yet saved anywhere (storage full). Saving is paused until you download it.') : ''}
+    ${keys.map((k) => row(k, `Found ${k.slice(k.indexOf('corrupt-') + 8)}`)).join('')}
+  </div>`;
+}
+
+function downloadDamaged(key) {
+  const raw = store.corruptRaw(key);
+  if (raw == null) { toast('That copy is gone.'); return; }
+  download(`lang-hub-damaged-${store.dayKey()}.json`, raw);
+  store.corruptDownloaded();
+}
+
+function doExport() {
+  download(`lang-hub-backup-${store.dayKey()}.json`, store.exportData());
+  store.markExported();
+  if (['settings', 'today'].includes(currentRoute().r)) render();
+}
+
+function undoToast(msg, kind, { undo }) {
+  toast(msg, undo ? {
+    action: 'Undo',
+    onAction: () => { toast(store.undo(kind) ? 'Restored.' : 'Could not undo.'); render(); },
+  } : {});
+}
+
+// Persistent warning above the page while saving fails.
+function updateBanner() {
+  const h = store.health();
+  let el = document.getElementById('data-banner');
+  if (!h.saveError) { el?.remove(); return; }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'data-banner';
+    el.className = 'data-banner';
+    el.setAttribute('role', 'alert');
+    el.addEventListener('click', (e) => {
+      const a = e.target.closest('[data-action]')?.dataset.action;
+      if (a === 'export') doExport();
+      else if (a === 'corrupt-download') downloadDamaged('');
+    });
+    view.before(el);
+  }
+  const paused = h.corrupt && !h.corrupt.preserved;
+  const html = `<p><strong>Your progress isn’t being saved.</strong> ${esc(h.saveError.message)} Export a backup so you don’t lose today’s work.</p>
+    <button class="btn btn-primary" data-action="${paused ? 'corrupt-download' : 'export'}">${paused ? 'Download damaged data' : 'Export'}</button>`;
+  if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
 }
 
 // ---------- router ----------
@@ -270,6 +382,7 @@ function render() {
   const tab = r in TAB_OF ? TAB_OF[r] : r;
   document.querySelectorAll('[data-tab]').forEach((a) => a.classList.toggle('active', a.dataset.tab === tab));
   document.body.classList.toggle('in-call', r === 'call');
+  updateBanner();
   bindView(r);
   coachViews.bind(r, params);
   listen.bind(r, params);
@@ -289,18 +402,34 @@ view.addEventListener('click', (e) => {
   const { action, skill } = btn.dataset;
   if (action === 'start') { store.startTimer(skill); render(); }
   else if (action === 'pause') { store.stopTimer(); render(); }
-  else if (action === 'export') {
-    const blob = new Blob([store.exportData()], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `lang-hub-backup-${store.dayKey()}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  else if (action === 'export') doExport();
+  else if (action === 'backup-snooze') { store.snoozeBackupReminder(); render(); }
+  else if (action === 'corrupt-download') downloadDamaged(btn.dataset.key);
+  else if (action === 'corrupt-delete') {
+    if (btn.dataset.confirm) { store.deleteCorruptCopy(btn.dataset.key); toast('Damaged copy deleted.'); render(); }
+    else { btn.dataset.confirm = '1'; btn.textContent = 'Tap again to delete'; }
   } else if (action === 'reset') {
-    if (btn.dataset.confirm) { store.resetAll(); toast('All progress deleted.'); render(); }
+    if (btn.dataset.confirm) { const r = store.resetAll(); render(); undoToast('All progress deleted.', 'reset', r); }
     else { btn.dataset.confirm = '1'; btn.textContent = 'Tap again to confirm'; }
   }
 });
+
+// ---------- data safety ----------
+// Another tab changed the data (or a save here was refused because of it): show the new state.
+store.subscribe((s, { source } = {}) => {
+  updateBanner();
+  if (source !== 'remote' && source !== 'conflict') return;
+  if (currentRoute().r !== 'call') render();
+  if (source === 'conflict') toast('Lang Hub is open in another tab, which saved newer progress. Loaded it; your last change here was not saved.', { ms: 8000 });
+});
+store.requestPersist().then((p) => {
+  const el = document.getElementById('persist-status');
+  if (el) el.textContent = persistText(p);
+});
+if (store.health().corrupt) {
+  toast('Saved progress was damaged and couldn’t be loaded, so the app started fresh. The damaged data is kept on this device (Settings).',
+    { action: 'Download damaged data', onAction: () => downloadDamaged(store.health().corrupt?.key || ''), ms: 15000 });
+}
 
 function bindView(r) {
   if (r === 'progress') coachViews.fillUsage();
@@ -328,8 +457,16 @@ function bindView(r) {
   $('#import-file').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    try { store.importData(await file.text()); toast('Backup imported.'); render(); }
-    catch (err) { toast(err.message || 'Could not read that file.'); }
+    let r;
+    try { r = store.importData(await file.text()); }
+    catch (err) { toast(err.message || 'Could not read that file.'); return; }
+    render();
+    undoToast('Backup imported.', 'import', r);
+  });
+  const use = $('#storage-use');
+  store.storageInfo().then((i) => {
+    if (!use.isConnected) return;
+    use.textContent = `Progress data: ${kb(i.data)}${i.quota ? ` · browser storage used: ${kb(i.usage || 0)} of ${kb(i.quota)}` : ''}`;
   });
 }
 
@@ -367,13 +504,57 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) { ma
 render();
 
 // ---------- service worker ----------
+// A new version waits until the user taps "Reload". The page never reloads by
+// itself during a live call: the reload waits until the call screen is closed.
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').then((reg) => {
+  const sw = navigator.serviceWorker;
+  const inCall = () => document.body.classList.contains('in-call') || document.body.classList.contains('has-call-bar');
+  let reg = null, wantReload = false, reloading = false, lastCheck = Date.now();
+
+  const reloadWhenFree = () => {
+    if (reloading) return;
+    if (!inCall()) { reloading = true; location.reload(); return; }
+    // Wait for the call screen to close (app.js toggles body.in-call per route).
+    const mo = new MutationObserver(() => { if (!inCall()) { mo.disconnect(); reloadWhenFree(); } });
+    mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  };
+
+  const showUpdate = () => {
+    let bar = document.getElementById('update-banner');
+    if (bar) return;
+    bar = document.createElement('div');
+    bar.id = 'update-banner';
+    bar.setAttribute('role', 'status');
+    bar.innerHTML = '<span>New version</span><button type="button" class="btn btn-primary">Reload</button>';
+    bar.querySelector('button').addEventListener('click', () => {
+      wantReload = true;
+      bar.remove();
+      if (reg?.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      else reloadWhenFree(); // already active (e.g. another tab took the update)
+    });
+    document.body.appendChild(bar);
+  };
+
+  const hadController = !!sw.controller;
+  sw.addEventListener('controllerchange', () => {
+    if (!hadController) return; // first install: nothing to reload
+    if (wantReload) reloadWhenFree();
+    else showUpdate(); // updated from another tab: offer the reload here too
+  });
+
+  sw.register('sw.js').then((r) => {
+    reg = r;
+    if (reg.waiting && sw.controller) showUpdate();
     reg.addEventListener('updatefound', () => {
       const nw = reg.installing;
-      nw?.addEventListener('statechange', () => {
-        if (nw.state === 'installed' && navigator.serviceWorker.controller) toast('A new version is ready. It will load next time you open the app.');
-      });
+      nw?.addEventListener('statechange', () => { if (nw.state === 'installed' && sw.controller) showUpdate(); });
     });
   }).catch(() => { /* offline support unavailable */ });
+
+  // Look for a new version when the app comes back to the foreground, at most once an hour.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || !reg || Date.now() - lastCheck < 3600e3) return;
+    lastCheck = Date.now();
+    reg.update().catch(() => { /* offline */ });
+  });
 }

@@ -1,0 +1,62 @@
+name: Service worker version
+
+# Installed apps only pick up new app files when VERSION in sw.js changes.
+# This check fails a pull request that changes a cached file without bumping it.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  version-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a VERSION bump in sw.js when cached files change
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          changed=$(git diff --name-only "$base" "$HEAD_SHA")
+
+          # Files in the SHELL list of sw.js (without the leading ./).
+          shell=$(git show "$HEAD_SHA:sw.js" | sed -n '/^const SHELL = \[/,/^\];/p' \
+            | grep -oE "'\./[^']*'" | tr -d "'" | sed 's#^\./##' | grep -v '^$' || true)
+
+          hits=()
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              index.html|js/*|css/*|content/*) hits+=("$f"); continue ;;
+            esac
+            if printf '%s\n' "$shell" | grep -qxF -- "$f"; then hits+=("$f"); fi
+          done <<< "$changed"
+
+          if [ ${#hits[@]} -eq 0 ]; then
+            echo "No cached app files changed; no VERSION bump needed."
+            exit 0
+          fi
+
+          version() { git show "$1:sw.js" 2>/dev/null | grep -E "^const VERSION *=" || true; }
+          old=$(version "$base")
+          new=$(version "$HEAD_SHA")
+          if [ -n "$new" ] && [ "$old" != "$new" ]; then
+            echo "VERSION changed: ${old:-none} -> $new"
+            exit 0
+          fi
+
+          echo "::error file=sw.js::These cached app files changed, but VERSION in sw.js did not: ${hits[*]}"
+          echo
+          echo "This pull request changes files that the service worker caches:"
+          printf '  - %s\n' "${hits[@]}"
+          echo
+          echo "Installed apps keep serving the old copies until VERSION changes."
+          echo "Bump the VERSION line in sw.js (for example 'v8' -> 'v9') and push again."
+          exit 1
