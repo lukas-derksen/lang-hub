@@ -1,6 +1,8 @@
 // Speak, Read, Review, conversation cards, live call and recap screens.
 import * as store from './store.js';
 import * as coach from './coach.js';
+import * as rec from './recommend.js';
+import { ratingCard } from './picks.js';
 
 let H = {}; // helpers from app.js: render, toast, blockCard, sectionPage, L, esc, mmss
 export function init(helpers) { H = helpers; }
@@ -170,8 +172,10 @@ const cardMinutes = () => Math.round(cardCount * 1.2);
 const cardLimit = () => Math.min(coach.MAX_CALL_MINUTES, Math.round(cardCount * 1.5) + 2);
 
 function drawCards(n) {
-  const quick = shuffle(content.cards.filter((c) => c.type === 'quick'));
-  const deep = shuffle(content.cards.filter((c) => c.type === 'deep'));
+  // Topics you enjoy come up a little more often (see recommend.weightedOrder).
+  const events = store.get().events;
+  const quick = rec.weightedOrder(content.cards.filter((c) => c.type === 'quick'), events);
+  const deep = rec.weightedOrder(content.cards.filter((c) => c.type === 'deep'), events);
   // Roughly 60% quick, 40% in depth, mixed so it never gets monotonous.
   const nDeep = Math.round(n * 0.4);
   return shuffle([...deep.slice(0, nDeep), ...quick.slice(0, n - nDeep)]);
@@ -282,14 +286,14 @@ async function startCall(opts) {
   if (budget().reached) { H.toast('You\'ve used your coach minutes for today. You can change the limit in Settings.'); return; }
   const left = creditsLeft();
   if (!opts.confirmed && left !== null && left < LOW_CREDITS) { askLowCredits(opts, left); return; }
-  const { mode, title, ref, skill, cards } = opts;
+  const { mode, title, ref, skill, cards, item } = opts;
   let { prompt, firstMessage } = opts;
   const maxMinutes = Math.min(opts.maxMinutes, coach.MAX_CALL_MINUTES);
   store.stopTimer(); // calls log their own time
   const voice = pickVoice();
   lastVoiceKey = voice?.key;
   if (voice) { prompt = personaFor(voice, prompt); firstMessage = firstMessage.replace(/\bElena\b/g, voice.name); }
-  const me = { voice, mode, title, ref, skill, status: 'starting', aiMode: 'listening', started: null, messages: [], mistakes: [], cards, cardIndex: 0, subtitles: false, maxMinutes, abort: new AbortController() };
+  const me = { voice, item, mode, title, ref, skill, status: 'starting', aiMode: 'listening', started: null, messages: [], mistakes: [], cards, cardIndex: 0, subtitles: false, maxMinutes, abort: new AbortController() };
   call = me;
   // Callbacks only act while this call is still the current one (not cancelled or replaced).
   const live = () => call === me;
@@ -341,7 +345,12 @@ function endCall(c, seconds, error = '') {
   call = null;
   if (secs > 0) store.addSeconds(store.dayKey(), c.skill, secs);
   store.logCall({ mode: c.mode, title: c.title, ref: c.ref, seconds: secs, mistakes: c.mistakes.length });
-  lastRecap = { title: c.title, mode: c.mode, seconds: secs, mistakes: c.mistakes, messages: c.messages, cardsDone: c.cards ? c.cardIndex + 1 : null, cardsTotal: c.cards?.length, dropped: error || '' };
+  if (c.item) {
+    // How engaged you were: long, talkative calls count for the topic; quick exits against it.
+    const yourTurns = c.messages.filter((m) => m.who === 'you').length;
+    store.logEvent({ item: c.item.key, topics: c.item.topics, type: 'talk', w: rec.callWeight({ seconds: secs, maxMinutes: c.maxMinutes, yourTurns }) });
+  }
+  lastRecap = { item: c.item, title: c.title, mode: c.mode, seconds: secs, mistakes: c.mistakes, messages: c.messages, cardsDone: c.cards ? c.cardIndex + 1 : null, cardsTotal: c.cards?.length, dropped: error || '' };
   usageCache = null;
   updateBar();
   location.hash = '#/recap';
@@ -457,6 +466,7 @@ export function viewRecap() {
     : `<div class="card"><p>${coachName()} didn't note any clear mistakes this time${r.seconds < 90 ? ' (it was a short call)' : ''}.</p></div>`}
   ${r.messages.length ? `<details class="card"><summary><strong>Transcript</strong></summary>
     <div class="subs">${r.messages.map((m) => `<p class="${m.who}" lang="it"><strong>${m.who === 'you' ? 'You' : coachName()}:</strong> ${esc(m.text)}</p>`).join('')}</div></details>` : ''}
+  ${r.item ? ratingCard(r.item) : ''}
   <div class="row"><a class="btn btn-primary" href="#/today">Back to today</a><a class="btn btn-ghost" href="#/review">Open review</a></div>`;
 }
 
@@ -506,6 +516,9 @@ export function settingsCard() {
   </div>` : ''}`;
 }
 
+/** What the app knows about a scene or article for personal picks. */
+const itemOf = (kind, x, skill) => ({ key: `${kind}:${x.id}`, topics: x.topics || [], d: rec.levelNum(x.level), skill });
+
 // ---------- events ----------
 document.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-action]');
@@ -513,12 +526,14 @@ document.addEventListener('click', async (e) => {
   const a = btn.dataset.action;
   const L = H.L();
   if (a === 'call-scene') {
-    const sc = content.scenes.find((x) => x.id === btn.dataset.id);
-    startCall({ mode: 'scene', title: sc.title, ref: sc.id, skill: 'speak', maxMinutes: sc.minutes, firstMessage: sc.firstMessage,
+    if (!content.scenes) await loadContent(); // started from Today's picks before Speak was opened
+    const sc = content.scenes?.find((x) => x.id === btn.dataset.id);
+    if (!sc) return;
+    startCall({ mode: 'scene', title: sc.title, ref: sc.id, skill: 'speak', item: itemOf('scene', sc, 'speak'), maxMinutes: sc.minutes, firstMessage: sc.firstMessage,
       prompt: buildPrompt(sc.instructions) });
   } else if (a === 'call-read') {
     const ar = content.articles.find((x) => x.id === btn.dataset.id);
-    startCall({ mode: 'read', title: ar.title, ref: ar.id, skill: 'read', maxMinutes: 12,
+    startCall({ mode: 'read', title: ar.title, ref: ar.id, skill: 'read', item: itemOf('article', ar, 'read'), maxMinutes: 12,
       firstMessage: `Allora, hai letto l'articolo "${ar.title}". Me lo riassumi con parole tue?`,
       prompt: buildPrompt(`A discussion about an article the learner has just read. Their goal is to show they understood the meaning, and to talk about it.
 1. Start by asking them to summarise it in their own words (already done in your first message).

@@ -70,6 +70,19 @@ const check = (cond, msg) => { console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}`); 
     const text = (await page.textContent('#view')) || '';
     check(text.trim().length > 20 && !/Loading…$/.test(text.trim()), `#/${r} renders`);
   }
+  // Today's picks: one card per block, with a reason, and "Something else" moves on.
+  await page.goto(`${BASE}#/today`);
+  await page.waitForSelector('.pick', { timeout: 5000 }).catch(() => {});
+  const picks = await page.$$eval('.pick', (els) => els.map((e) => ({ title: e.querySelector('strong')?.textContent, reason: e.querySelector('.pick-reason')?.textContent })));
+  check(picks.length >= 1 && picks.every((p) => p.title && p.reason), `today shows picks with reasons (${picks.map((p) => `${p.title}: ${p.reason}`).join(' | ')})`);
+  if (picks.length) {
+    await page.click('[data-action=pick-skip] >> nth=0');
+    await page.waitForTimeout(200);
+    const after = await page.$eval('.pick strong', (e) => e.textContent);
+    const st = await page.evaluate(() => JSON.parse(localStorage.getItem('langhub.v1')));
+    check(after !== picks[0].title && st.events.some((e) => e.type === 'skip') && st.picks?.day, '"Something else" shows another pick and is remembered');
+  }
+
   const clip = await page.evaluate(() => fetch('content/it/clips.json').then((r) => r.json()).then((d) => d.clips[0].id));
   await page.goto(`${BASE}#/listen/${clip}`);
   await page.waitForSelector('[data-action=clip-play]');
@@ -86,6 +99,13 @@ const check = (cond, msg) => { console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}`); 
   await page.click('[data-action=end-call]');
   await page.waitForFunction(() => location.hash === '#/recap');
   check(await page.evaluate(() => JSON.parse(localStorage.getItem('langhub.v1')).calls.length === 1), 'call logged after ending');
+  await page.click('[data-action=rate][data-value=up]');
+  await page.click('[data-action=rate-level][data-value=right]');
+  const evs = await page.evaluate(() => JSON.parse(localStorage.getItem('langhub.v1')).events);
+  check(evs.some((e) => e.type === 'talk' && e.item.startsWith('scene:')) && evs.some((e) => e.type === 'rate' && e.w === 1) && evs.some((e) => e.type === 'rate-level' && e.skill === 'speak'),
+    'call engagement and the recap rating are recorded');
+  await page.goto(`${BASE}#/progress`);
+  check(/What the app has learned/.test(await page.textContent('#view')), 'progress shows what the app has learned');
 
   // Offline: the installed app still opens.
   await ctx.setOffline(true);

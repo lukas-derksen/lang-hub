@@ -118,6 +118,14 @@ main { max-width: 640px; margin: 0 auto; padding: 8px 16px 0; outline: none; }
 .block-actions { display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
 .badge { margin-left: auto; font-size: .85rem; font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 4px 10px; border-radius: 999px; }
 
+/* today's picks */
+.picks { display: grid; gap: 12px; }
+.picks .pick { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.pick .row { margin-top: 8px; }
+.pick-reason { color: var(--accent); font-weight: 600; margin: 0; }
+.pick.done .pick-reason { color: var(--muted); }
+.rate-card .chips { margin: 6px 0; }
+
 .bar { height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; margin-top: 12px; }
 .bar > span { display: block; height: 100%; background: var(--accent); border-radius: inherit; transition: width .4s ease; }
 

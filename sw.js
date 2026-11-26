@@ -4,7 +4,7 @@
 // - Everything else in SHELL: precached on install and served cache first.
 // Bump VERSION whenever a shell file changes (CI checks this on pull requests).
 // A new version waits until the user taps "Reload" in the app (no auto skipWaiting).
-const VERSION = 'v9';
+const VERSION = 'v10';
 const CACHE = `langhub-${VERSION}`;
 const NETWORK_TIMEOUT = 3000;
 const SHELL = [
@@ -18,6 +18,8 @@ const SHELL = [
   './js/coachviews.js',
   './js/listen.js',
   './js/review.js',
+  './js/recommend.js',
+  './js/picks.js',
   './content/it/clips.json',
   './content/it/scenes.json',
   './content/it/cards.json',

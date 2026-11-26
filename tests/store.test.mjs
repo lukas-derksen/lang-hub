@@ -315,3 +315,28 @@ describe('review scheduling', () => {
     assert.equal(e.srs.interval, 3);
   });
 });
+
+describe('engagement events', () => {
+  test('a new rating replaces the earlier one for the same item; other events stay', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: at(2026, 11, 26) });
+    const store = await fresh();
+    store.logEvent({ item: 'clip:a', topics: ['food'], type: 'finish', w: 0.4 });
+    store.logEvent({ item: 'clip:a', topics: ['food'], type: 'rate', value: 'up', w: 1 });
+    store.logEvent({ item: 'clip:a', topics: ['food'], type: 'rate', value: 'down', w: -1 });
+    store.logEvent({ item: 'clip:a', topics: ['food'], type: 'rate-level', value: 'hard', skill: 'listen', d: 3, perf: 0.3 });
+    const ev = stored().events;
+    assert.deepEqual(ev.map((e) => e.type), ['finish', 'rate', 'rate-level']);
+    assert.equal(ev[1].value, 'down');
+    assert.deepEqual(store.recentRating('clip:a'), { rate: 'down', level: 'hard' });
+  });
+
+  test('events survive export and import; a bad events field is refused', async () => {
+    const store = await fresh();
+    store.logEvent({ item: 'scene:bar', topics: ['food'], type: 'talk', w: 0.5 });
+    const json = store.exportData();
+    const other = await fresh();
+    other.importData(json);
+    assert.equal(other.get().events.length, 1);
+    assert.throws(() => other.importData(JSON.stringify({ days: {}, events: 'x' })), /events is not a list/);
+  });
+});
