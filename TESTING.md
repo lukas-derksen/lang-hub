@@ -22,3 +22,13 @@ Calls now connect over WebRTC and fall back to WebSocket. Listening clips use ne
 2. **Glitches in a call.** Talk for two minutes, ideally once on Wi-Fi and once on mobile data. Listen for clicks, short dropouts, robotic "warbling" and the coach's voice speeding up after a gap. On WebRTC, a bad network should sound like brief softening of the voice, not hard cuts.
 3. **Echo.** Use the phone speaker instead of headphones. The coach should no longer react to its own voice (WebRTC uses the browser's echo cancellation).
 4. **Clips.** Play a clip with Paolo, Roberta, Gianni or Bernardo (they have new voices) and compare it with one of the old voices (Tatiana, Lodovico). Listen for a "phone" sound: thin, boxy, no air on the s and f sounds, a hum or room noise between words. Tell Claude which voices still sound like that, so they can be swapped.
+
+# Manual test: shadowing and real Italian videos (about 5 minutes)
+
+The automated test uses a fake microphone and a stand-in for the YouTube player, so check these on a phone once.
+
+1. **Shadow a clip.** Listen → a clip → *Shadow this clip*. Allow the microphone. *Listen, then repeat*: the sentence plays, then "Your turn". Say it, tap *Done*. Expect rhythm, melody and pace, two melody lines and a tip. Say it badly on purpose (flat, slow): the scores must drop. *Check words* needs the key's *Speech to Text* permission.
+2. **Along with.** Headphones on, *Along with*: it records while the sentence plays and stops by itself.
+3. **Video.** Listen → a video under *Real Italian*. It must play inside the app. Try 0.75× and *Italian captions* (the video restarts where it was). If one says it can't be embedded, try another and tell me which id failed.
+4. **Mark and shadow.** Play, tap *✂ Mark phrase* at the end of a sentence, nudge the ends, play the phrase: it must stop at the end. *Shadow*: the video pauses before your turn, *Them, then you* plays both.
+5. **Add a video.** Paste a YouTube link from RaiNews or another channel. It opens at the link's `t=` time if it has one.

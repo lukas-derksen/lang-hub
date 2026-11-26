@@ -25,3 +25,5 @@ jobs:
         run: npm install --no-save --no-package-lock playwright@1.49.1 && npx playwright install --with-deps chromium
       - name: Browser smoke test
         run: node tests/smoke.cjs
+      - name: Shadowing and video test
+        run: node tests/shadow-smoke.cjs
