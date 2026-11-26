@@ -308,16 +308,19 @@ const check = (cond, msg) => { console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}`); 
   // When WebRTC can't connect, the call falls back to WebSocket with a signed URL.
   {
     const p2 = await ctx.newPage();
-    p2.on('pageerror', (e) => errors.push(e.message));
+    p2.on('pageerror', (e) => errors.push(`[fallback page] ${e.message}`));
+    p2.on('console', (m) => { if (m.type() === 'error') errors.push(`[fallback page] ${m.text()}`); });
     await p2.addInitScript(mockSdk);
     await p2.addInitScript(() => { window.__mock.failWebrtc = true; });
     await p2.goto(`${BASE}#/speak`);
     await p2.waitForSelector('[data-action=call-scene]:not([disabled])');
     await p2.click('[data-action=call-scene] >> nth=0');
-    await p2.waitForFunction(() => location.hash === '#/call' && window.__mock.sessions.length === 1, null, { timeout: 5000 }).catch(() => {});
+    // Poll with evaluate (not waitForFunction, which evaluates a string in the page and trips the CSP).
+    const poll = async (fn, ms = 5000) => { for (let i = 0; i < ms / 100; i++) { if (await p2.evaluate(fn)) return true; await p2.waitForTimeout(100); } return false; };
+    await poll(() => location.hash === '#/call' && window.__mock.sessions.length === 1);
     const fb = await p2.evaluate(() => { const s = window.__mock.sessions[0]; return { attempts: window.__mock.attempts, type: s?.o.connectionType, url: s?.o.signedUrl }; });
     check(fb.attempts === 2 && fb.type === 'websocket' && fb.url === 'wss://api.elevenlabs.io/test', `a failed WebRTC call retries over WebSocket (${JSON.stringify(fb)})`);
-    if (fb.type) { await p2.click('[data-action=end-call]'); await p2.waitForFunction(() => location.hash === '#/recap'); }
+    if (fb.type) { await p2.click('[data-action=end-call]'); await poll(() => location.hash === '#/recap'); }
     await p2.close();
   }
 
