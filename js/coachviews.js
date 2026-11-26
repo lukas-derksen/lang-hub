@@ -4,6 +4,8 @@ import * as coach from './coach.js';
 
 let H = {}; // helpers from app.js: render, toast, blockCard, sectionPage, L, esc, mmss
 export function init(helpers) { H = helpers; }
+let R = null; // review module (drills, categories)
+export function setReview(r) { R = r; }
 
 const esc = (s) => H.esc(s);
 const coachName = () => H.L().coach.name;
@@ -184,14 +186,17 @@ export function viewReview() {
     <h1>✎ Review</h1>
     <p class="muted">Every mistake ${coachName()} notices ends up here. Read them out loud in the correct form, it's the fastest way to make them stick.</p>
   </section>
+  ${(() => { const due = R.dueCount(); return ms.length ? `<div class="card notice"><h3>${due ? `${due} card${due === 1 ? '' : 's'} to practise` : 'All caught up'}</h3>
+    <p class="muted">${due ? 'Fix your own mistakes, out loud. Cards you find hard come back sooner.' : 'Nothing is due right now. New mistakes from conversations are added automatically.'}</p>
+    ${due ? '<a class="btn btn-primary" href="#/drill">Start drills</a>' : ''}</div>` : ''; })()}
   ${H.blockCard('review', { compact: true })}
   ${top.length ? `<div class="card"><h3>What you get wrong most</h3>
-    ${top.map(([c, n]) => `<div class="skill-row"><span>${esc(c)}</span><div class="bar"><span style="width:${(n / top[0][1]) * 100}%"></span></div><span class="muted">${n}</span></div>`).join('')}
+    ${top.map(([c, n]) => `<div class="skill-row"><span>${esc(R.CATEGORY[c]?.it || c)}</span><div class="bar"><span style="width:${(n / top[0][1]) * 100}%"></span></div><span class="muted">${n}</span></div>`).join('')}
   </div>` : ''}
   <h2 class="section-title">Mistake log ${ms.length ? `<span class="muted small">(${ms.length})</span>` : ''}</h2>
   ${ms.length ? `<div class="mistakes">${ms.slice(0, 100).map(mistakeRow).join('')}</div>`
     : `<div class="card"><p class="muted">No mistakes yet. Have a conversation with ${coachName()} and they'll show up here.</p></div>`}
-  <div class="card soon"><h3>Coming next</h3><ul><li>Spaced repetition drills built from this log, where you say whole sentences.</li><li>A weekly summary to bring to your tutor.</li></ul></div>`;
+  <a class="card extra-row" href="#/report"><span class="scene-ico" aria-hidden="true">📝</span><span><strong>Report for your tutor</strong><br><span class="muted small">Your recurring mistakes and how they're changing</span></span><span aria-hidden="true">›</span></a>`;
 }
 
 function mistakeRow(m) {
