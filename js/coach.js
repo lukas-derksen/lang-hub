@@ -45,7 +45,7 @@ export async function usage(key = store.getApiKey()) {
 
 /**
  * Start a live call. Returns a controller; callbacks report progress.
- * opts: { agentId, prompt, firstMessage, maxSeconds, wrapUp, onStatus, onMode, onMessage, onMistake, onEnd, onError }
+ * opts: { agentId, prompt, firstMessage, voiceId, maxSeconds, wrapUp, onStatus, onMode, onMessage, onMistake, onEnd, onError }
  */
 export async function startCall(opts) {
   const key = store.getApiKey();
@@ -80,6 +80,7 @@ export async function startCall(opts) {
     connectionType: 'websocket',
     overrides: {
       agent: { prompt: { prompt: opts.prompt }, firstMessage: opts.firstMessage },
+      ...(opts.voiceId ? { tts: { voiceId: opts.voiceId } } : {}),
     },
     clientTools: {
       log_mistake: (params) => { opts.onMistake?.(params); return 'logged'; },

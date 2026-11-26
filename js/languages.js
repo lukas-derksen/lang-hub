@@ -10,11 +10,11 @@ export const LANGUAGES = {
     goalDone: 'Ottimo lavoro!',
     content: 'content/it/',
     coach: {
-      name: 'Elena',
+      name: 'Elena', // default coach; the name follows the chosen voice (see voices)
       // Public id of the private ElevenLabs agent. It's useless without the
       // API key, which lives only on your device (Settings).
       agentId: 'agent_2001m8c2gwahfvb96y5pwb1rhb7v',
-      persona: `You are Elena, a warm, curious Italian conversation coach from Bologna. You speak ONLY Italian, at a natural native pace, as you would with a friend. Your learner is around B1 (speaking a bit weaker than reading) and wants to become fluent in real-life conversation.
+      persona: `You are {name}, a warm, curious Italian conversation coach from {city} ({gender}). You speak ONLY Italian, at a natural native pace, as you would with a friend. Your learner is around B1 (speaking a bit weaker than reading) and wants to become fluent in real-life conversation.
 
 General rules:
 - Your turns are short (1 to 3 sentences) so the learner talks most of the time. Ask open follow-up questions.
@@ -23,6 +23,19 @@ General rules:
 - Use natural spoken Italian with common expressions and fillers (allora, cioè, dai, magari), but no heavy dialect.
 - When the learner says goodbye or wants to stop, close warmly in one sentence and end the call.
 - Messages that start with [APP] come from the learning app, not the learner. Follow them silently without mentioning the app.`,
+      // Voices the coach can speak with (Settings → Coach voice). The first is the
+      // default. Each one gets its own name and home town, so the persona fits.
+      voices: [
+        { key: 'simona', id: 'HKiPKi8GDXhcIoBzK4ZE', name: 'Elena', voice: 'Simona', gender: 'female', city: 'Bologna', accent: 'Standard Italian' },
+        { key: 'giulia', id: 'uC9VI5XrTxXRNlCzGSKR', name: 'Giulia', voice: 'Giulia', gender: 'female', city: 'Verona', accent: 'Standard Italian' },
+        { key: 'paolo', id: '4W8fSCDzySFWZZDHotZN', name: 'Paolo', voice: 'Paolo', gender: 'male', city: 'Torino', accent: 'Standard Italian' },
+        { key: 'roberta', id: 'BrADZHWW7Di4Z7YPNjmK', name: 'Roberta', voice: 'Roberta', gender: 'female', city: 'Roma', accent: 'Rome' },
+        { key: 'alice', id: 'yqYUuLveKQAg3xn3wYbI', name: 'Alice', voice: 'Alice', gender: 'female', city: 'Milano', accent: 'Milan' },
+        { key: 'gianni', id: 'EgL698ysMZ8wysqxqSEz', name: 'Gianni', voice: 'Gianni', gender: 'male', city: 'Milano', accent: 'Milan' },
+        { key: 'bernardo', id: 'TpjKmVjyMxPMjyG4qG5h', name: 'Bernardo', voice: 'Bernardo', gender: 'male', city: 'Firenze', accent: 'Florence' },
+        { key: 'tatiana', id: '0agAAs6kdPUv4MFeK9wx', name: 'Tatiana', voice: 'Tatiana', gender: 'female', city: 'Napoli', accent: 'Naples, stronger accent' },
+        { key: 'lodovico', id: 'uA5aGNikV4gcPbh3C2IT', name: 'Lodovico', voice: 'Lodovico', gender: 'male', city: 'Palermo', accent: 'Sicily, stronger accent' },
+      ],
       wrapUp: '[APP] Less than a minute left. Bring the conversation to a natural close within your next two turns and say goodbye.',
     },
   },

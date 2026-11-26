@@ -30,6 +30,7 @@ Progress is stored in the browser's `localStorage` on each device. Use **Setting
 
 - The agent is private (authentication on), so a call needs a one-time signed URL. The app gets it with the ElevenLabs API key you paste in **Settings**, which is stored only in that browser (`localStorage`, key `langhub.secret`) and never in the repo or the backup export.
 - Use a restricted key (ElevenAgents + User: read) with a monthly credit limit.
+- **Coach voice** (Settings): pick one of the Italian voices in `js/languages.js` (`coach.voices`), or a different voice each call. The coach's name and home town follow the voice. The agent allows the client to override `tts.voice_id` for this.
 - The agent id, persona and wrap-up message live in `js/languages.js`; scenes, conversation cards and articles in `content/it/`.
 - Calls stop on their own at the scene's time limit, and the agent hangs up after 45 seconds of silence. The agent itself allows one call at a time and 15 calls a day.
 - The ElevenLabs browser SDK is vendored in `vendor/` (v1.35.0) so the app needs no build step.
