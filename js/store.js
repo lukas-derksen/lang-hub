@@ -155,6 +155,9 @@ export function addSeconds(key, skill, secs, persist = true) {
   if (persist) save();
 }
 
+/** 'rotate' or a voice key from the language's coach.voices. */
+export function setCoachVoice(v) { state.settings.coachVoice = v; save(); }
+
 export function setPlan(plan, readDays) {
   state.settings.plan = { ...state.settings.plan, ...plan };
   if (readDays) state.settings.readDays = readDays;

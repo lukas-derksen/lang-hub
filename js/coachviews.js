@@ -8,7 +8,20 @@ let R = null; // review module (drills, categories)
 export function setReview(r) { R = r; }
 
 const esc = (s) => H.esc(s);
-const coachName = () => H.L().coach.name;
+// ---------- coach voice ----------
+const voices = () => H.L().coach.voices || [];
+const voiceSetting = () => store.get().settings.coachVoice || voices()[0]?.key;
+let lastVoiceKey = null;
+/** The voice for the next call: the chosen one, or a different one each call when rotating. */
+function pickVoice() {
+  const all = voices();
+  if (voiceSetting() !== 'rotate') return all.find((v) => v.key === voiceSetting()) || all[0];
+  const pool = all.filter((v) => v.key !== lastVoiceKey);
+  return pool[Math.floor(Math.random() * pool.length)] || all[0];
+}
+// During a call: that call's coach. Otherwise: the chosen coach, or "your coach" when rotating.
+const coachName = () => call?.voice?.name
+  || (voiceSetting() === 'rotate' ? 'your coach' : (voices().find((v) => v.key === voiceSetting())?.name || H.L().coach.name));
 
 // ---------- content ----------
 const content = { scenes: null, cards: null, articles: null, error: null };
@@ -71,7 +84,7 @@ export function viewSpeak() {
   <section class="page-head">
     <p class="eyebrow">${H.L().name}</p>
     <h1>🗣 Speaking</h1>
-    <p class="muted">Talk out loud with ${coachName()}. She keeps the conversation going and quietly notes your mistakes for the recap.</p>
+    <p class="muted">Talk out loud with ${coachName()}. They keep the conversation going and quietly notes your mistakes for the recap.</p>
   </section>
   ${hasKey ? '' : keyMissingCard()}
   ${!ready() ? loading() : `
@@ -216,16 +229,22 @@ let lastRecap = null;
 function buildPrompt(activity) {
   return `${H.L().coach.persona}\n\nACTIVITY FOR THIS CALL:\n${activity}`;
 }
+function personaFor(v, prompt) {
+  return prompt.replace('{name}', v.name).replace('{city}', v.city).replace('{gender}', v.gender === 'male' ? 'a man' : 'a woman');
+}
 
 async function startCall({ mode, title, ref, prompt, firstMessage, maxMinutes, skill, cards }) {
   if (call) return;
   store.stopTimer(); // calls log their own time
-  call = { mode, title, ref, skill, status: 'starting', aiMode: 'listening', started: null, messages: [], mistakes: [], cards, cardIndex: 0, subtitles: false, maxMinutes };
+  const voice = pickVoice();
+  lastVoiceKey = voice?.key;
+  if (voice) { prompt = personaFor(voice, prompt); firstMessage = firstMessage.replace(/\bElena\b/g, voice.name); }
+  call = { voice, mode, title, ref, skill, status: 'starting', aiMode: 'listening', started: null, messages: [], mistakes: [], cards, cardIndex: 0, subtitles: false, maxMinutes };
   location.hash = '#/call';
   try {
     call.ctrl = await coach.startCall({
       agentId: H.L().coach.agentId,
-      prompt, firstMessage,
+      prompt, firstMessage, voiceId: voice?.id,
       maxSeconds: maxMinutes * 60,
       wrapUp: H.L().coach.wrapUp,
       onStatus: (st) => { if (!call) return; call.status = st; if (st === 'connected') call.started = Date.now(); updateCall(); },
@@ -341,7 +360,16 @@ export function settingsCard() {
       ${key ? '<button class="btn btn-ghost" type="button" data-action="forget-key">Remove key</button>' : ''}
     </div>
     <div id="credit-meter"></div>
-  </form>`;
+  </form>
+  ${voices().length > 1 ? `<div class="card">
+    <h3>Coach voice</h3>
+    <p class="muted">Pick who you talk to, or let the app switch to a different voice each call so you get used to more voices and accents. The coach's name follows the voice.</p>
+    <label class="stack"><span>Voice</span>
+      <select id="coach-voice">
+        <option value="rotate"${voiceSetting() === 'rotate' ? ' selected' : ''}>Different voice each call</option>
+        ${voices().map((v) => `<option value="${v.key}"${voiceSetting() === v.key ? ' selected' : ''}>${esc(v.name)} (${v.gender === 'male' ? 'm' : 'f'}, ${esc(v.accent)})</option>`).join('')}
+      </select></label>
+  </div>` : ''}`;
 }
 
 // ---------- events ----------
@@ -412,6 +440,10 @@ export function bind(r) {
     document.querySelectorAll('input[name=cardcount]').forEach((i) => i.addEventListener('change', () => { cardCount = Number(i.value); H.render(); }));
   }
   if (r === 'settings') {
+    document.getElementById('coach-voice')?.addEventListener('change', (e) => {
+      store.setCoachVoice(e.target.value);
+      H.toast(e.target.value === 'rotate' ? 'A different voice each call.' : `Your coach is now ${coachName()}.`);
+    });
     if (store.getApiKey()) fillUsage();
     document.getElementById('coach-form')?.addEventListener('submit', async (e) => {
       e.preventDefault();
