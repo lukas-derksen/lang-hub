@@ -5,7 +5,7 @@ A personal PWA for daily language practice, built around a 30 minute routine of 
 ## Roadmap
 
 1. **App shell and daily routine** (this version): "Today" screen with timers per skill, streak, weekly view, progress page, settings, backup.
-2. **Speaking partner**: live conversations with an ElevenLabs voice agent, with a mistake log and recap.
+2. **Speaking coach** (done): live calls with Elena, a private ElevenLabs voice agent. Role play scenes, reading discussions and conversation cards, a mistake log, a recap after each call and a credit meter.
 3. **Listening and reading**: the listening trainer: clips in different voices, accents and speeds, dictation and a "distracted mode" with background noise. The reading section has an article with some depth, followed by a live conversation with a coach about it.
 4. **Grammar through use**: spaced repetition drills built from the mistake log, plus a weekly summary for the tutor.
 
@@ -25,3 +25,11 @@ Served by GitHub Pages from the root of `main`. When you change a file listed in
 ## Data
 
 Progress is stored in the browser's `localStorage` on each device. Use **Settings → Export** to back it up or move it to another device.
+
+## Coach (ElevenLabs)
+
+- The agent is private (authentication on), so a call needs a one-time signed URL. The app gets it with the ElevenLabs API key you paste in **Settings**, which is stored only in that browser (`localStorage`, key `langhub.secret`) and never in the repo or the backup export.
+- Use a restricted key (ElevenAgents + User: read) with a monthly credit limit.
+- The agent id, persona and wrap-up message live in `js/languages.js`; scenes, conversation cards and articles in `content/it/`.
+- Calls stop on their own at the scene's time limit, and the agent hangs up after 45 seconds of silence. The agent itself allows one call at a time and 15 calls a day.
+- The ElevenLabs browser SDK is vendored in `vendor/` (v1.35.0) so the app needs no build step.
