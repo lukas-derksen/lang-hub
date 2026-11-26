@@ -102,14 +102,24 @@ export async function usage(key = store.getApiKey()) {
 }
 
 const signedUrl = (key, agentId) => api(`/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(agentId)}`, key, 'call');
+const callToken = (key, agentId) => api(`/convai/conversation/token?agent_id=${encodeURIComponent(agentId)}`, key, 'call');
+
+// How calls connect. WebRTC is what ElevenLabs recommends for voice: Opus audio at
+// 48 kHz with a jitter buffer, packet-loss concealment and the browser's echo
+// cancellation, so the coach doesn't stutter when the network hiccups. The older
+// WebSocket mode streams raw 16 to 24 kHz PCM over TCP, where one late packet
+// stalls everything behind it (audible as glitches and gaps). If WebRTC can't
+// connect (some networks block it), the call falls back to WebSocket, and the
+// rest of this session uses WebSocket straight away.
+let preferWebSocket = false;
 
 /**
- * Test a key the way calls use it: request a signed URL for the agent (this
+ * Test a key the way calls use it: request a call token for the agent (this
  * throws when calls won't work), then read the credits as an extra.
  * Returns { usage, usageError } where usageError is a message or ''.
  */
 export async function testKey(key, agentId) {
-  await signedUrl(key, agentId);
+  await callToken(key, agentId);
   try {
     return { usage: await usage(key), usageError: '' };
   } catch (e) {
@@ -142,7 +152,7 @@ export async function startCall(opts) {
   if (aborted()) return null;
 
   opts.onStatus?.('connecting');
-  const [{ signed_url: url }, SDK] = await Promise.all([signedUrl(key, opts.agentId), loadSdk()]);
+  const SDK = await loadSdk();
   if (aborted()) return null;
 
   const startedAt = Date.now();
@@ -155,10 +165,12 @@ export async function startCall(opts) {
     if (!aborted()) opts.onEnd?.({ seconds: Math.round((Date.now() - startedAt) / 1000), reason, error });
   };
 
-  try {
-    conversation = await SDK.Conversation.startSession({
-      signedUrl: url,
-      connectionType: 'websocket',
+  // Callbacks for one connection attempt. A WebRTC attempt that failed may still
+  // fire callbacks; only the attempt in use may report to the app.
+  let attempt = 0;
+  const sessionFor = (n) => {
+    const live = () => n === attempt && !aborted();
+    return {
       overrides: {
         agent: { prompt: { prompt: opts.prompt }, firstMessage: opts.firstMessage },
         ...(opts.voiceId ? { tts: { voiceId: opts.voiceId } } : {}),
@@ -167,23 +179,52 @@ export async function startCall(opts) {
         conversation: { maxDurationSeconds: maxSeconds + SERVER_GRACE_SECONDS },
       },
       clientTools: {
-        log_mistake: (params) => { if (!aborted()) opts.onMistake?.(params); return 'logged'; },
+        log_mistake: (params) => { if (live()) opts.onMistake?.(params); return 'logged'; },
       },
-      onConnect: () => { if (!aborted()) opts.onStatus?.('connected'); },
+      onConnect: () => { if (live()) opts.onStatus?.('connected'); },
       onDisconnect: (details = {}) => {
+        // Ignore a drop while connecting: startSession then throws and we retry or report it.
+        if (n !== attempt || !conversation) return;
         // The server ending at its time cap is a normal end, not a drop.
         const timeUp = details.context?.type === 'max_duration_exceeded';
         finish(details.reason || 'disconnected', details.reason === 'error' && !timeUp ? explainDisconnect(details) : '');
       },
       onError: (message) => {
-        if (aborted() || ended) return;
+        if (!live() || ended) return;
         opts.onError?.(typeof message === 'string' ? explainDisconnect({ message: message.replace(/^Server error:\s*/, '') }) : 'Something went wrong in the call.');
       },
-      onModeChange: ({ mode }) => { if (!aborted()) opts.onMode?.(mode); },
-      onMessage: (m) => { if (!aborted()) opts.onMessage?.(m); },
-    });
+      onModeChange: ({ mode }) => { if (live()) opts.onMode?.(mode); },
+      onMessage: (m) => { if (live()) opts.onMessage?.(m); },
+    };
+  };
+  const viaWebSocket = async () => {
+    const { signed_url: signedUrlValue } = await signedUrl(key, opts.agentId);
+    if (aborted()) return null;
+    attempt++;
+    return SDK.Conversation.startSession({ ...sessionFor(attempt), signedUrl: signedUrlValue, connectionType: 'websocket' });
+  };
+
+  try {
+    if (preferWebSocket) {
+      conversation = await viaWebSocket();
+    } else {
+      const { token } = await callToken(key, opts.agentId);
+      if (aborted()) return null;
+      try {
+        attempt++;
+        conversation = await SDK.Conversation.startSession({ ...sessionFor(attempt), conversationToken: token, connectionType: 'webrtc' });
+      } catch (e) {
+        if (aborted()) return null;
+        // WebRTC blocked or failed on this network: try the WebSocket connection once.
+        console.warn('[coach] WebRTC call failed, retrying over WebSocket:', e?.message || e);
+        conversation = await viaWebSocket();
+        preferWebSocket = true;
+      }
+    }
+    if (!conversation) return null; // aborted while connecting
   } catch (e) {
     if (aborted()) return null;
+    if (e?.status) throw e; // an API error from fetching the token or signed URL, already explained
     const err = new Error(explainDisconnect({ message: e?.message, closeCode: e?.closeCode, closeReason: e?.closeReason }));
     err.refused = true;
     throw err;

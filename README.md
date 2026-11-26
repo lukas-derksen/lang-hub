@@ -37,7 +37,7 @@ Progress is stored in the browser's `localStorage` on each device. Use **Setting
 
 ## Coach (ElevenLabs)
 
-- The agent is private (authentication on), so a call needs a one-time signed URL. The app gets it with the ElevenLabs API key you paste in **Settings**, which is stored only in that browser (`localStorage`, key `langhub.secret`) and never in the repo or the backup export.
+- The agent is private (authentication on), so a call needs a one-time conversation token (or a signed URL for the WebSocket fallback). The app gets it with the ElevenLabs API key you paste in **Settings**, which is stored only in that browser (`localStorage`, key `langhub.secret`) and never in the repo or the backup export.
 - Use a restricted key (ElevenAgents + User: read) with a monthly credit limit.
 - **Coach voice** (Settings): pick one of the Italian voices in `js/languages.js` (`coach.voices`), or a different voice each call. The coach's name and home town follow the voice. The agent allows the client to override `tts.voice_id` for this.
 - The agent id, persona and wrap-up message live in `js/languages.js`; scenes, conversation cards and articles in `content/it/`.
@@ -111,7 +111,7 @@ script-src 'self' blob: 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/@alexand
 style-src 'self' 'unsafe-inline';
 img-src 'self' data: blob: https://i.ytimg.com;
 media-src 'self' blob:;
-connect-src 'self' https://api.elevenlabs.io wss://api.elevenlabs.io https://lang-hub-api.dark-bird-a775.workers.dev;
+connect-src 'self' https://api.elevenlabs.io wss://api.elevenlabs.io https://livekit.rtc.elevenlabs.io wss://livekit.rtc.elevenlabs.io https://lang-hub-api.dark-bird-a775.workers.dev;
 worker-src 'self' blob:;
 frame-src https://www.youtube-nocookie.com;
 object-src 'none'; base-uri 'self'; form-action 'self'
@@ -119,7 +119,7 @@ object-src 'none'; base-uri 'self'; form-action 'self'
 
 - No inline scripts or event handlers: all code is in `js/` and `vendor/`. Keep it that way.
 - `style-src 'unsafe-inline'` is only there for `style="width:…"` attributes in the templates (progress bars).
-- `connect-src` allows only ElevenLabs (REST calls on `https://api.elevenlabs.io` and the call's WebSocket on `wss://api.elevenlabs.io`) and your own content server, `https://lang-hub-api.dark-bird-a775.workers.dev`, by its exact address (not `*.workers.dev`, which anyone can deploy to). Calls use `connectionType: 'websocket'`; the SDK's WebRTC mode would also need `wss://livekit.rtc.elevenlabs.io`.
+- `connect-src` allows only ElevenLabs (REST calls on `https://api.elevenlabs.io`, WebRTC call signalling on `livekit.rtc.elevenlabs.io`, and the WebSocket fallback on `wss://api.elevenlabs.io`) and your own content server, `https://lang-hub-api.dark-bird-a775.workers.dev`, by its exact address (not `*.workers.dev`, which anyone can deploy to). Calls use WebRTC (`connectionType: 'webrtc'` with a conversation token) and fall back to WebSocket (signed URL) if WebRTC can't connect. The audio itself flows over WebRTC media, which `connect-src` doesn't govern.
 - The content server's address is `ALLOWED_ORIGIN` in `js/server.js`; Settings refuses any other address. If the server moves, change it there and in `index.html`'s `connect-src` together.
 - Everything from the content server (titles, icons, ids, numbers) is escaped or coerced before it goes into the page, and generated items with a broken shape are skipped.
 - The voice SDK loads its audio worklets from `blob:` URLs, which `script-src blob:` allows. When the device can't record at 16 kHz it also loads a resampler worklet (WebAssembly) from jsDelivr, so that exact URL and `'wasm-unsafe-eval'` are allowed too. To drop them, vendor the worklets and pass `workletPaths` / `libsampleratePath` to `startSession` in `js/coach.js`.

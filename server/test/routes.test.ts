@@ -241,7 +241,11 @@ test('S4: audio by segment hash (immutable), 409 on a stale hash, old route not 
 test('S4: the app hashes segments the same way (js/listen.js)', () => {
   const src = readFileSync(new URL('../../js/listen.js', import.meta.url), 'utf8');
   assert.ok(src.includes('fnv1a(`${seg.text}\\u0000${TTS_MODEL}\\u0000${JSON.stringify(VOICE_SETTINGS)}`)'), 'segHash input');
-  assert.ok(src.includes(`const VOICE_SETTINGS = { stability: ${VOICE_SETTINGS.stability}, similarity_boost: ${VOICE_SETTINGS.similarity_boost}, style: ${VOICE_SETTINGS.style}, speed: 1.0 };`), 'voice settings');
+  // Same settings, in the same key order (the order changes JSON.stringify and so the hash).
+  const m = src.match(/const VOICE_SETTINGS = (\{[^}]*\});/);
+  assert.ok(m, 'voice settings in js/listen.js');
+  const app = Function(`return (${m![1]})`)();
+  assert.equal(JSON.stringify(app), JSON.stringify(VOICE_SETTINGS), 'voice settings');
   assert.ok(src.includes(`'${TTS_MODEL}'`), 'TTS model');
 });
 

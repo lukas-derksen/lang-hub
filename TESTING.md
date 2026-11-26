@@ -14,6 +14,15 @@ Run this on a phone with the installed app after changes to the coach, listening
 
 Write down anything odd, with the time, so the call can be found in the ElevenLabs conversation history.
 
+## Audio quality (about 5 minutes)
+
+Calls now connect over WebRTC and fall back to WebSocket. Listening clips use new voice settings and four new voices, so they are voiced again on their next play (about 7,000 credits for the built-in clips).
+
+1. **Which connection a call used.** Start a call with the browser console open. A line `[coach] WebRTC call failed, retrying over WebSocket` means WebRTC was blocked on this network and the call used the old path. No such line means WebRTC worked.
+2. **Glitches in a call.** Talk for two minutes, ideally once on Wi-Fi and once on mobile data. Listen for clicks, short dropouts, robotic "warbling" and the coach's voice speeding up after a gap. On WebRTC, a bad network should sound like brief softening of the voice, not hard cuts.
+3. **Echo.** Use the phone speaker instead of headphones. The coach should no longer react to its own voice (WebRTC uses the browser's echo cancellation).
+4. **Clips.** Play a clip with Paolo, Roberta, Gianni or Bernardo (they have new voices) and compare it with one of the old voices (Tatiana, Lodovico). Listen for a "phone" sound: thin, boxy, no air on the s and f sounds, a hum or room noise between words. Tell Claude which voices still sound like that, so they can be swapped.
+
 # Manual test: shadowing and real Italian videos (about 5 minutes)
 
 The automated test uses a fake microphone and a stand-in for the YouTube player, so check these on a phone once.

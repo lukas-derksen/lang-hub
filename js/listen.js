@@ -15,7 +15,10 @@ const esc = (s) => H.esc(s);
 // character) but sounds flatter. Changing it re-voices clips on their next play.
 const TTS_MODEL = 'eleven_multilingual_v2';
 const CREDITS_PER_CHAR = { eleven_flash_v2_5: 0.5, eleven_turbo_v2_5: 0.5 }[TTS_MODEL] ?? 1;
-const VOICE_SETTINGS = { stability: 0.4, similarity_boost: 0.8, style: 0.25, speed: 1.0 };
+// Voice settings, as ElevenLabs recommends for clean audio: a high similarity boost
+// copies the noise and artifacts of the voice's original recording, and any style
+// above 0 makes the model less stable. Same values as server/src/tts.ts.
+const VOICE_SETTINGS = { stability: 0.5, similarity_boost: 0.7, style: 0, speed: 1.0, use_speaker_boost: true };
 const CLIP_CACHE = 'lhclips-v1'; // separate from the app-shell cache so updates keep clips
 const VOICED_KEY = 'langhub.voiced'; // clip ids voiced on this device (not in the backup)
 const GAP = 0.45; // seconds of silence between dialogue turns

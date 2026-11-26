@@ -1,12 +1,12 @@
 {
   "voices": {
-    "paolo": { "id": "4W8fSCDzySFWZZDHotZN", "name": "Paolo", "accent": "Standard Italian" },
+    "paolo": { "id": "1s5ETcPtsJ9W2cUUQrDb", "name": "Paolo", "accent": "Standard Italian" },
     "alice": { "id": "yqYUuLveKQAg3xn3wYbI", "name": "Alice", "accent": "Milan" },
     "tatiana": { "id": "0agAAs6kdPUv4MFeK9wx", "name": "Tatiana", "accent": "Naples" },
-    "roberta": { "id": "BrADZHWW7Di4Z7YPNjmK", "name": "Roberta", "accent": "Rome" },
+    "roberta": { "id": "2bMAiYn9nNnA5AepoHYR", "name": "Roberta", "accent": "Rome" },
     "lodovico": { "id": "uA5aGNikV4gcPbh3C2IT", "name": "Lodovico", "accent": "Sicily" },
-    "bernard": { "id": "TpjKmVjyMxPMjyG4qG5h", "name": "Bernardo", "accent": "Florence" },
-    "gianni": { "id": "EgL698ysMZ8wysqxqSEz", "name": "Gianni", "accent": "Milan" },
+    "bernard": { "id": "GRjgv3Z8Gg3RY82Qo6FW", "name": "Bernardo", "accent": "Florence" },
+    "gianni": { "id": "nH7uLS5UdEnvKEOAXtlQ", "name": "Gianni", "accent": "Milan" },
     "giulia": { "id": "uC9VI5XrTxXRNlCzGSKR", "name": "Giulia", "accent": "Standard Italian" }
   },
   "clips": [
