@@ -4,6 +4,7 @@ import * as coach from './coach.js';
 import * as rec from './recommend.js';
 import { ratingCard } from './picks.js';
 import * as server from './server.js';
+import { hideLink } from './serverviews.js';
 
 let H = {}; // helpers from app.js: render, toast, blockCard, sectionPage, L, esc, mmss
 export function init(helpers) { H = helpers; }
@@ -11,6 +12,8 @@ let R = null; // review module (drills, categories)
 export function setReview(r) { R = r; }
 
 const esc = (s) => H.esc(s);
+/** A number from content (generated items may carry strings or junk). */
+const num = (v, d) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : d);
 // ---------- coach voice ----------
 const voices = () => H.L().coach.voices || [];
 const voiceSetting = () => store.get().settings.coachVoice || voices()[0]?.key;
@@ -140,12 +143,12 @@ export function viewSpeak() {
   ${!ready() ? loading() : `
   <h2 class="section-title">Pick a conversation</h2>
   <div class="scene-grid">${content.scenes.map((sc) => `
-    <button class="scene card" data-action="call-scene" data-id="${sc.id}" ${ok ? '' : 'disabled'}>
-      <span class="scene-ico" aria-hidden="true">${sc.icon}</span>
+    <button class="scene card" data-action="call-scene" data-id="${esc(sc.id)}" ${ok ? '' : 'disabled'}>
+      <span class="scene-ico" aria-hidden="true">${esc(sc.icon || '💬')}</span>
       ${sc.generated && !store.get().calls.some((c) => c.mode === 'scene' && c.ref === sc.id) ? '<span class="pill pill-new">New for you</span>' : ''}
       <strong>${esc(sc.title)}</strong>
       <span class="muted small">${esc(sc.subtitle)}</span>
-      <span class="muted small">up to ${Math.min(sc.minutes, coach.MAX_CALL_MINUTES)} min</span>
+      <span class="muted small">up to ${Math.min(num(sc.minutes, 10), coach.MAX_CALL_MINUTES)} min</span>
     </button>`).join('')}
   </div>
   <a class="card extra-row" href="#/cards">
@@ -210,9 +213,9 @@ export function viewRead(id) {
   ${hasKey ? budgetCard() : keyMissingCard()}
   <div class="article-list">${content.articles.map((a) => {
     const done = store.get().calls.some((c) => c.mode === 'read' && c.ref === a.id);
-    return `<a class="card article-row" href="#/read/${a.id}">
+    return `<a class="card article-row" href="#/read/${esc(a.id)}">
       ${a.generated && !done ? '<span class="pill pill-new">New for you</span>' : ''}
-      <span class="muted small">${esc(a.topic)} · ${esc(a.level)} · ${a.minutes} min read${done ? ' · discussed ✓' : ''}</span>
+      <span class="muted small">${esc(a.topic)} · ${esc(a.level)} · ${num(a.minutes, 5)} min read${done ? ' · discussed ✓' : ''}</span>
       <strong>${esc(a.title)}</strong>
     </a>`;
   }).join('')}</div>
@@ -228,7 +231,7 @@ function articleView(id) {
   return `
   <a class="back" href="#/read">‹ Reading</a>
   <article class="reader card">
-    <p class="muted small">${esc(a.topic)} · ${esc(a.level)} · ${a.minutes} min read</p>
+    <p class="muted small">${esc(a.topic)} · ${esc(a.level)} · ${num(a.minutes, 5)} min read ${hideLink(a, '#/read')}</p>
     <h1 lang="it">${esc(a.title)}</h1>
     ${a.paragraphs.map((p) => `<p lang="it">${esc(p)}</p>`).join('')}
   </article>
@@ -240,7 +243,7 @@ function articleView(id) {
     <h3>Now talk about it</h3>
     <p>${coachName()} will ask you to sum it up, check the main points and ask what you think. Try not to look back at the text.</p>
     ${!hasKey ? '<a class="btn btn-primary" href="#/settings">Add API key to discuss</a>'
-    : canCall() ? `<button class="btn btn-primary" data-action="call-read" data-id="${a.id}">Discuss with ${coachName()}</button>`
+    : canCall() ? `<button class="btn btn-primary" data-action="call-read" data-id="${esc(a.id)}">Discuss with ${coachName()}</button>`
     : '<p class="muted small">Your coach minutes for today are used up. Raise the limit in <a href="#/settings">Settings</a>, or come back tomorrow.</p>'}
   </div>`;
 }
@@ -276,7 +279,7 @@ function mistakeRow(m) {
     <p class="correct" lang="it">${esc(m.correct)}</p>
     ${m.explanation ? `<p class="muted small">${esc(m.explanation)}</p>` : ''}
     <p class="muted small">${esc(m.category)} · ${new Date(m.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}${m.source ? ` · ${esc(m.source)}` : ''}
-      <button class="link-btn" data-action="del-mistake" data-id="${m.id}" aria-label="Remove">Remove</button></p>
+      <button class="link-btn" data-action="del-mistake" data-id="${esc(m.id)}" aria-label="Remove">Remove</button></p>
   </div>`;
 }
 
@@ -299,14 +302,14 @@ async function startCall(opts) {
   if (budget().reached) { H.toast('You\'ve used your coach minutes for today. You can change the limit in Settings.'); return; }
   const left = creditsLeft();
   if (!opts.confirmed && left !== null && left < LOW_CREDITS) { askLowCredits(opts, left); return; }
-  const { mode, title, ref, skill, cards, item } = opts;
+  const { mode, title, ref, skill, cards, item, gen } = opts;
   let { prompt, firstMessage } = opts;
   const maxMinutes = Math.min(opts.maxMinutes, coach.MAX_CALL_MINUTES);
   store.stopTimer(); // calls log their own time
   const voice = pickVoice();
   lastVoiceKey = voice?.key;
   if (voice) { prompt = personaFor(voice, prompt); firstMessage = firstMessage.replace(/\bElena\b/g, voice.name); }
-  const me = { voice, item, mode, title, ref, skill, status: 'starting', aiMode: 'listening', started: null, messages: [], mistakes: [], cards, cardIndex: 0, subtitles: false, maxMinutes, abort: new AbortController() };
+  const me = { voice, item, gen, mode, title, ref, skill, status: 'starting', aiMode: 'listening', started: null, messages: [], mistakes: [], cards, cardIndex: 0, subtitles: false, maxMinutes, abort: new AbortController() };
   call = me;
   // Callbacks only act while this call is still the current one (not cancelled or replaced).
   const live = () => call === me;
@@ -357,13 +360,14 @@ function endCall(c, seconds, error = '') {
   if (!c.started || (error && secs < 10 && !c.messages.length)) { dropCall(c, error || 'The call could not connect.'); return; }
   call = null;
   if (secs > 0) store.addSeconds(store.dayKey(), c.skill, secs);
+  server.syncSoon(); // the server learns about this call now, not in ten minutes
   store.logCall({ mode: c.mode, title: c.title, ref: c.ref, seconds: secs, mistakes: c.mistakes.length });
   if (c.item) {
     // How engaged you were: long, talkative calls count for the topic; quick exits against it.
     const yourTurns = c.messages.filter((m) => m.who === 'you').length;
     store.logEvent({ item: c.item.key, topics: c.item.topics, type: 'talk', w: rec.callWeight({ seconds: secs, maxMinutes: c.maxMinutes, yourTurns }) });
   }
-  lastRecap = { item: c.item, title: c.title, mode: c.mode, seconds: secs, mistakes: c.mistakes, messages: c.messages, cardsDone: c.cards ? c.cardIndex + 1 : null, cardsTotal: c.cards?.length, dropped: error || '' };
+  lastRecap = { gen: c.gen, ref: c.ref, item: c.item, title: c.title, mode: c.mode, seconds: secs, mistakes: c.mistakes, messages: c.messages, cardsDone: c.cards ? c.cardIndex + 1 : null, cardsTotal: c.cards?.length, dropped: error || '' };
   usageCache = null;
   updateBar();
   location.hash = '#/recap';
@@ -480,6 +484,7 @@ export function viewRecap() {
   ${r.messages.length ? `<details class="card"><summary><strong>Transcript</strong></summary>
     <div class="subs">${r.messages.map((m) => `<p class="${m.who}" lang="it"><strong>${m.who === 'you' ? 'You' : coachName()}:</strong> ${esc(m.text)}</p>`).join('')}</div></details>` : ''}
   ${r.item ? ratingCard(r.item) : ''}
+  ${r.gen && server.byKind(r.mode === 'read' ? 'article' : 'scene').some((x) => x.id === r.ref) ? `<p class="muted small">Not a good one? ${hideLink(r.gen, r.mode === 'read' ? '#/read' : '#/speak')}</p>` : ''}
   <div class="row"><a class="btn btn-primary" href="#/today">Back to today</a><a class="btn btn-ghost" href="#/review">Open review</a></div>`;
 }
 
@@ -524,12 +529,14 @@ export function settingsCard() {
     <label class="stack"><span>Voice</span>
       <select id="coach-voice">
         <option value="rotate"${voiceSetting() === 'rotate' ? ' selected' : ''}>Different voice each call</option>
-        ${voices().map((v) => `<option value="${v.key}"${voiceSetting() === v.key ? ' selected' : ''}>${esc(v.name)} (${v.gender === 'male' ? 'm' : 'f'}, ${esc(v.accent)})</option>`).join('')}
+        ${voices().map((v) => `<option value="${esc(v.key)}"${voiceSetting() === v.key ? ' selected' : ''}>${esc(v.name)} (${v.gender === 'male' ? 'm' : 'f'}, ${esc(v.accent)})</option>`).join('')}
       </select></label>
   </div>` : ''}`;
 }
 
 /** What the app knows about a scene or article for personal picks. */
+/** For generated items: what the recap's "Hide this" link needs. */
+const genOf = (x) => (x.generated ? { id: x.id, serverId: x.serverId, generated: x.generated } : null);
 const itemOf = (kind, x, skill) => ({ key: `${kind}:${x.id}`, topics: x.topics || [], d: rec.levelNum(x.level), skill });
 
 // ---------- events ----------
@@ -542,11 +549,12 @@ document.addEventListener('click', async (e) => {
     if (!content.scenes) await loadContent(); // started from Today's picks before Speak was opened
     const sc = content.scenes?.find((x) => x.id === btn.dataset.id);
     if (!sc) return;
-    startCall({ mode: 'scene', title: sc.title, ref: sc.id, skill: 'speak', item: itemOf('scene', sc, 'speak'), maxMinutes: sc.minutes, firstMessage: sc.firstMessage,
+    startCall({ mode: 'scene', title: sc.title, ref: sc.id, skill: 'speak', item: itemOf('scene', sc, 'speak'), gen: genOf(sc), maxMinutes: num(sc.minutes, 10), firstMessage: sc.firstMessage,
       prompt: buildPrompt(sc.instructions) });
   } else if (a === 'call-read') {
-    const ar = content.articles.find((x) => x.id === btn.dataset.id);
-    startCall({ mode: 'read', title: ar.title, ref: ar.id, skill: 'read', item: itemOf('article', ar, 'read'), maxMinutes: 12,
+    const ar = content.articles?.find((x) => x.id === btn.dataset.id);
+    if (!ar) return;
+    startCall({ mode: 'read', title: ar.title, ref: ar.id, skill: 'read', item: itemOf('article', ar, 'read'), gen: genOf(ar), maxMinutes: 12,
       firstMessage: `Allora, hai letto l'articolo "${ar.title}". Me lo riassumi con parole tue?`,
       prompt: buildPrompt(`A discussion about an article the learner has just read. Their goal is to show they understood the meaning, and to talk about it.
 1. Start by asking them to summarise it in their own words (already done in your first message).

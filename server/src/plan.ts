@@ -73,3 +73,33 @@ export function focusCategories(mistakes: Profile['mistakes'], now: number, n = 
 
 export const topicLabel = (t: string): string => rec.topicLabel(t);
 export const rng = (seed: string): (() => number) => rec.rng(seed);
+
+/**
+ * The profile the app syncs (PUT /api/profile), reduced to known fields with sane sizes.
+ * Events keep only { at, item, topics, type, w, skill, d, perf } (see js/store.js logEvent);
+ * anything else, or of the wrong type, is dropped.
+ */
+export function cleanProfile(body: any, now: number): Profile {
+  const str = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : undefined);
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  const events: Ev[] = [];
+  for (const e of (Array.isArray(body?.events) ? body.events : []).slice(-3000)) {
+    if (!e || typeof e !== 'object' || num(e.at) === undefined) continue;
+    const ev: Ev = { at: e.at };
+    const item = str(e.item, 80), type = str(e.type, 16), skill = str(e.skill, 8);
+    if (item !== undefined) ev.item = item;
+    if (Array.isArray(e.topics)) ev.topics = e.topics.filter((t: unknown) => typeof t === 'string').slice(0, 6).map((t: string) => t.slice(0, 24));
+    if (type !== undefined) ev.type = type;
+    if (num(e.w) !== undefined) ev.w = e.w;
+    if (skill !== undefined) ev.skill = skill;
+    if (num(e.d) !== undefined) ev.d = e.d;
+    if (num(e.perf) !== undefined) ev.perf = e.perf;
+    events.push(ev);
+  }
+  return {
+    events,
+    used: (Array.isArray(body?.used) ? body.used : []).filter((x: unknown) => typeof x === 'string').slice(-2000).map((x: string) => x.slice(0, 120)),
+    mistakes: (Array.isArray(body?.mistakes) ? body.mistakes : []).slice(0, 500).map((m: any) => ({ at: Number(m?.at) || 0, category: String(m?.category || '').slice(0, 40) })),
+    updatedAt: now,
+  };
+}

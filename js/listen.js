@@ -4,6 +4,7 @@ import * as store from './store.js';
 import { levelNum } from './recommend.js';
 import { ratingCard } from './picks.js';
 import * as server from './server.js';
+import { hideLink } from './serverviews.js';
 
 let H = {};
 export function init(helpers) { H = helpers; }
@@ -26,7 +27,11 @@ function ready() {
   if (loadErr) return false; // retried on 'online' or with the Try again button
   loadingP ||= fetch(`${H.L().content}clips.json`)
     .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-    .then((d) => { data = { ...d, clips: [...server.byKind('clip'), ...d.clips] }; afterLoad(); })
+    .then((d) => {
+      // Generated clips whose speakers this language doesn't know can't be voiced: leave them out.
+      const gen = server.byKind('clip').filter((c) => c.segments.every((s) => d.voices?.[s.voice]));
+      data = { ...d, clips: [...gen, ...d.clips] }; afterLoad();
+    })
     .catch(() => { loadErr = 'Could not load the clips. Connect to the internet and try again.'; loadingP = null; })
     .finally(() => H.render());
   return false;
@@ -42,7 +47,7 @@ export function reset() { if (player) return false; data = null; loadErr = null;
 
 const chars = (clip) => clip.segments.reduce((a, s) => a + s.text.length, 0);
 const credits = (n) => Math.round(n * CREDITS_PER_CHAR).toLocaleString('en-GB');
-const speakersOf = (clip) => [...new Set(clip.segments.map((s) => s.voice))].map((v) => data.voices[v]);
+const speakersOf = (clip) => [...new Set(clip.segments.map((s) => s.voice))].map((v) => data.voices[v]).filter(Boolean);
 
 // ---------- audio generation + cache ----------
 /** FNV-1a 32-bit hash as 8 hex digits: short and stable, not for security. */
@@ -53,7 +58,7 @@ function fnv1a(str) {
 }
 // The cache URL includes a hash of the text, model and voice settings, so editing a
 // clip's text (or the model) voices it again instead of playing the old audio.
-const segHash = (seg) => fnv1a(`${seg.text}\u0000${TTS_MODEL}\u0000${JSON.stringify(VOICE_SETTINGS)}`);
+export const segHash = (seg) => fnv1a(`${seg.text}\u0000${TTS_MODEL}\u0000${JSON.stringify(VOICE_SETTINGS)}`);
 const segBase = (clip, i) => `${clip.id}-${i}-${data.voices[clip.segments[i].voice].id}`;
 const segUrl = (clip, i) => new URL(`clips-cache/${segBase(clip, i)}-${segHash(clip.segments[i])}.mp3`, location.href).href;
 
@@ -131,7 +136,8 @@ async function fetchSegment(clip, i) {
   try { cache = await caches.open(CLIP_CACHE); const hit = await cache.match(url); if (hit) return hit.arrayBuffer(); } catch (e) { /* no cache */ }
   if (server.enabled()) {
     // Voiced once on your content server and shared by all your devices.
-    const buf = await server.segmentAudio(clip.id, i);
+    // The hash lets the server refuse (409) when its text differs from ours.
+    const buf = await server.segmentAudio(clip.id, i, segHash(clip.segments[i]));
     try { await cache?.put(url, new Response(buf.slice(0), { headers: { 'Content-Type': 'audio/mpeg' } })); } catch (e) { /* storage full */ }
     return buf;
   }
@@ -300,11 +306,11 @@ export function viewListen(id) {
   <div class="article-list">${data.clips.map((c) => {
     const r = results[c.id];
     const sp = speakersOf(c);
-    return `<a class="card article-row" href="#/listen/${c.id}">
+    return `<a class="card article-row" href="#/listen/${esc(c.id)}">
       ${c.generated && !r ? '<span class="pill pill-new">New for you</span>' : ''}
       <span class="muted small">${esc(c.genre)} · ${esc(c.level)} · ${sp.map((v) => `${esc(v.name)} (${esc(v.accent)})`).join(', ')}</span>
       <strong lang="it">${esc(c.title)}</strong>
-      ${r ? `<span class="small done">Best: ${r.best}/${c.questions.length}${r.dict != null ? ` · dictation ${r.dict}%` : ''}</span>` : `<span class="muted small" data-cost="${c.id}"></span>`}
+      ${r ? `<span class="small done">Best: ${Number(r.best) || 0}/${c.questions.length}${r.dict != null ? ` · dictation ${Number(r.dict) || 0}%` : ''}</span>` : `<span class="muted small" data-cost="${esc(c.id)}"></span>`}
     </a>`;
   }).join('')}</div>
   ${H.videosSection ? H.videosSection() : ''}
@@ -327,6 +333,7 @@ function clipView(id) {
     <p class="muted small">${esc(c.genre)} · ${esc(c.level)}</p>
     <h1 lang="it">${esc(c.title)}</h1>
     <p class="muted small">${sp.map((v) => `🎙 ${esc(v.name)}, ${esc(v.accent)}`).join(' · ')}</p>
+    ${hideLink(c, '#/listen')}
   </section>
 
   <div class="card player" id="player">
@@ -533,7 +540,7 @@ function rerenderKeepingPlayer() { keepPlayer = true; const y = window.scrollY; 
 export function bind(r, params) {
   if (r !== 'listen') { if (player) { cleanupPlayer(); if (store.get().timer?.skill === 'listen') store.stopTimer(); } return; }
   if (!params[0]) {
-    if (data) data.clips.forEach(async (c) => { const el = document.querySelector(`[data-cost="${c.id}"]`); if (el) el.textContent = (await isCached(c)) ? 'Ready offline' : server.enabled() ? 'Not downloaded yet' : `New · about ${credits(chars(c))} credits to voice`; });
+    if (data) data.clips.forEach(async (c) => { const el = document.querySelector(`[data-cost="${CSS.escape(c.id)}"]`); if (el) el.textContent = (await isCached(c)) ? 'Ready offline' : server.enabled() ? 'Not downloaded yet' : `New · about ${credits(chars(c))} credits to voice`; });
     return;
   }
   if (player && player.clipId !== params[0] && !keepPlayer) cleanupPlayer();

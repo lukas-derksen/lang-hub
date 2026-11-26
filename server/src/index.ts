@@ -2,10 +2,11 @@
 // your interests and level, voices clips once, and serves both to the app.
 // Single user: every /api route except /api/health needs the app password
 // (LANGHUB_APP_TOKEN) as a bearer token.
-import Anthropic from '@anthropic-ai/sdk';
-import { BUILTIN, write, finish, type Brief } from './generate.ts';
-import { topUp, chooseTopic, targetLevel, focusCategories, rng, type Kind, type Profile, type Caps } from './plan.ts';
-import { audioKey, voice, TtsError } from './tts.ts';
+import { BUILTIN, write, finish, WriteError, type Brief } from './generate.ts';
+import { topUp, chooseTopic, targetLevel, focusCategories, cleanProfile, rng, type Kind, type Caps } from './plan.ts';
+import { audioKey, segHash, voice, TtsError } from './tts.ts';
+import { deps } from './deps.ts';
+import * as db from './db.ts';
 
 export interface Env {
   DB: D1Database;
@@ -18,20 +19,28 @@ export interface Env {
   TTS_MODEL: string;
   CLIPS_PER_WEEK: string; ARTICLES_PER_WEEK: string; SCENES_PER_WEEK: string; CARD_BATCHES_PER_WEEK: string;
   TTS_MONTHLY_CHARS: string;
+  CLAUDE_MONTHLY_INPUT_TOKENS: string; CLAUDE_MONTHLY_OUTPUT_TOKENS: string;
 }
 
-type Item = { id: string; kind: Kind; created_at: number; data: any };
 const KINDS: Kind[] = ['article', 'clip', 'scene', 'cards'];
-const month = (t = Date.now()) => new Date(t).toISOString().slice(0, 7);
+const LABEL: Record<Kind, string> = { article: 'articles', clip: 'clips', scene: 'scenes', cards: 'card batches' };
+const MAX_FAILS_PER_DAY = 2;        // failed Claude attempts per kind per UTC day, then skip it
+const TOPUP_EVERY = 10 * 60e3;      // POST /api/topup at most this often
+const PROFILE_MAX = 1_500_000;      // bytes
+const BUSY = 'Already writing new content, try again in a few minutes';
+
+/** A reason not to write now (budget used up, too many failures): skipped, not an error. */
+class SkipError extends Error {}
 
 // ---------- http helpers ----------
 function cors(req: Request, env: Env): Record<string, string> {
   const origin = req.headers.get('Origin') || '';
   const ok = env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()).includes(origin);
-  return ok ? { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, PUT, POST, OPTIONS', 'Access-Control-Max-Age': '86400', Vary: 'Origin' } : { Vary: 'Origin' };
+  return ok ? { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, PUT, POST, DELETE, OPTIONS', 'Access-Control-Max-Age': '86400', Vary: 'Origin' } : { Vary: 'Origin' };
 }
 const json = (data: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers } });
+const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 async function sha256(s: string): Promise<Uint8Array> { return new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))); }
 /** Constant-time check of the bearer token against APP_TOKEN. */
@@ -44,34 +53,22 @@ async function authorized(req: Request, env: Env): Promise<boolean> {
   return diff === 0 && got.length > 0;
 }
 
-// ---------- storage ----------
-async function getProfile(env: Env): Promise<Profile> {
-  const row = await env.DB.prepare('SELECT value FROM state WHERE key = ?').bind('profile').first<{ value: string }>();
-  const p = row ? JSON.parse(row.value) : {};
-  return { events: Array.isArray(p.events) ? p.events : [], used: Array.isArray(p.used) ? p.used : [], mistakes: Array.isArray(p.mistakes) ? p.mistakes : [], updatedAt: p.updatedAt };
-}
-async function addUsage(env: Env, kind: string, amount: number) {
-  if (!amount) return;
-  await env.DB.prepare('INSERT INTO usage (month, kind, amount) VALUES (?, ?, ?) ON CONFLICT(month, kind) DO UPDATE SET amount = amount + excluded.amount')
-    .bind(month(), kind, Math.round(amount)).run();
-}
-async function usageThisMonth(env: Env): Promise<Record<string, number>> {
-  const { results } = await env.DB.prepare('SELECT kind, amount FROM usage WHERE month = ?').bind(month()).all<{ kind: string; amount: number }>();
-  return Object.fromEntries(results.map((r) => [r.kind, r.amount]));
-}
-async function allItems(env: Env, since = 0): Promise<Item[]> {
-  const { results } = await env.DB.prepare('SELECT id, kind, created_at, data FROM items WHERE created_at > ? ORDER BY created_at').bind(since).all<{ id: string; kind: Kind; created_at: number; data: string }>();
-  return results.map((r) => ({ ...r, data: JSON.parse(r.data) }));
-}
-
 const caps = (env: Env): Caps => ({
   clip: Number(env.CLIPS_PER_WEEK) || 0, article: Number(env.ARTICLES_PER_WEEK) || 0,
   scene: Number(env.SCENES_PER_WEEK) || 0, cards: Number(env.CARD_BATCHES_PER_WEEK) || 0,
 });
+const claudeLimits = (env: Env) => ({ input: Number(env.CLAUDE_MONTHLY_INPUT_TOKENS) || 2_000_000, output: Number(env.CLAUDE_MONTHLY_OUTPUT_TOKENS) || 300_000 });
+
+/** Runs fn while holding the writing lease; null when another run holds it. */
+async function withLock<T>(env: Env, fn: (owner: string) => Promise<T>): Promise<T | null> {
+  const owner = await db.acquireLock(env.DB);
+  if (!owner) return null;
+  try { return await fn(owner); } finally { await db.releaseLock(env.DB, owner); }
+}
 
 // ---------- clips and audio ----------
-function findClip(id: string, generated: Item[]): any {
-  return BUILTIN.clips.clips.find((c: any) => c.id === id) || generated.find((g) => g.kind === 'clip' && g.data.id === id)?.data;
+async function findClip(env: Env, id: string): Promise<any> {
+  return BUILTIN.clips.clips.find((c: any) => c.id === id) || (await db.getClip(env.DB, id));
 }
 const voiceIdOf = (key: string) => BUILTIN.clips.voices[key]?.id as string | undefined;
 
@@ -83,125 +80,184 @@ async function segmentAudio(env: Env, clip: any, i: number): Promise<ArrayBuffer
   const key = audioKey(clip.id, i, vid, seg.text, env.TTS_MODEL);
   const hit = await env.AUDIO.get(key, 'arrayBuffer');
   if (hit) return hit;
-  const used = (await usageThisMonth(env)).tts_chars || 0;
-  if (used + seg.text.length > (Number(env.TTS_MONTHLY_CHARS) || 0)) throw new TtsError('The server\'s voice budget for this month is used up.', 429);
-  const buf = await voice(env.ELEVENLABS_TTS_KEY, vid, seg.text, env.TTS_MODEL);
-  await addUsage(env, 'tts_chars', seg.text.length);
+  // Reserve the characters first (atomic), so two requests at once can't both pass the budget.
+  const chars = seg.text.length;
+  const m = await db.reserve(env.DB, 'tts_chars', chars, Number(env.TTS_MONTHLY_CHARS) || 0);
+  if (!m) throw new TtsError('The server\'s voice budget for this month is used up.', 429);
+  let buf: ArrayBuffer;
+  try { buf = await voice(env.ELEVENLABS_TTS_KEY, vid, seg.text, env.TTS_MODEL); } catch (e) { await db.refund(env.DB, m, 'tts_chars', chars); throw e; }
   await env.AUDIO.put(key, buf);
   return buf;
 }
 
 // ---------- generation ----------
-async function generate(env: Env, kind: Kind, now = Date.now()): Promise<Item> {
-  const prof = await getProfile(env);
-  const existing = await allItems(env);
+/** Throws SkipError when this kind shouldn't be written now. */
+async function checkCanWrite(env: Env, kind: Kind): Promise<void> {
+  const u = await db.usageThisMonth(env.DB), lim = claudeLimits(env);
+  if ((u.claude_input || 0) >= lim.input || (u.claude_output || 0) >= lim.output) {
+    throw new SkipError(`This month's Claude budget is used up (${u.claude_input || 0}/${lim.input} input, ${u.claude_output || 0}/${lim.output} output tokens).`);
+  }
+  if ((await db.failuresToday(env.DB, kind)) >= MAX_FAILS_PER_DAY) {
+    throw new SkipError(`Writing new ${LABEL[kind]} failed ${MAX_FAILS_PER_DAY} times today; trying again tomorrow.`);
+  }
+}
+
+/** Write, check and store one item (the caller holds the lease). */
+async function generate(env: Env, kind: Kind, now = Date.now()): Promise<db.Item> {
+  await checkCanWrite(env, kind);
+  const prof = await db.getProfile(env.DB);
   const r = rng(`${now}:${kind}`);
   const { topic } = chooseTopic(prof.events, now, r);
   const titles = [
     ...(kind === 'article' ? BUILTIN.articles : kind === 'clip' ? BUILTIN.clips.clips : kind === 'scene' ? BUILTIN.scenes : []).map((x: any) => x.title),
-    ...existing.filter((x) => x.kind === kind).map((x) => x.data.title).filter(Boolean),
+    ...(await db.recentTitles(env.DB, kind)),
   ];
   const brief: Brief = { kind, topic, level: targetLevel(prof.events, kind), focus: focusCategories(prof.mistakes, now), avoidTitles: titles };
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
-  const { raw, usage } = await write(client, env.MODEL, brief);
-  await addUsage(env, 'claude_input', usage.input);
-  await addUsage(env, 'claude_output', usage.output);
-  let { id, data } = finish(kind, raw, brief, now);
-  for (let n = 2; existing.some((x) => x.id === id); n++) { id = `${data.id}-${n}`; }
+  let item: { id: string; data: any };
+  try {
+    let out;
+    try {
+      out = await write(deps.claude(env.ANTHROPIC_API_KEY), env.MODEL, brief);
+    } catch (e) {
+      // A reply that didn't work out still cost tokens; an API error without a reply costs none.
+      if (e instanceof WriteError && e.usage) { await db.addUsage(env.DB, 'claude_input', e.usage.input); await db.addUsage(env.DB, 'claude_output', e.usage.output); }
+      throw e;
+    }
+    await db.addUsage(env.DB, 'claude_input', out.usage.input);
+    await db.addUsage(env.DB, 'claude_output', out.usage.output);
+    item = finish(kind, out.raw, brief, now);
+  } catch (e) {
+    await db.recordAttempt(env.DB, kind, false, message(e));
+    throw e;
+  }
+  await db.recordAttempt(env.DB, kind, true);
+  let { id, data } = item;
+  for (let n = 2; await db.idTaken(env.DB, id); n++) id = `${data.id}-${n}`;
   data.id = id;
-  await env.DB.prepare('INSERT INTO items (id, kind, created_at, data) VALUES (?, ?, ?, ?)').bind(id, kind, now, JSON.stringify(data)).run();
+  const created_at = await db.insertItem(env.DB, id, kind, data);
   if (kind === 'clip') {
     // Voice it straight away so it's ready on every device (best effort: else on first play).
     for (let i = 0; i < data.segments.length; i++) { try { await segmentAudio(env, data, i); } catch (e) { console.log('voicing failed', id, i, String(e)); break; } }
   }
-  return { id, kind, created_at: now, data };
+  return { id, kind, created_at, data };
 }
 
-/** Generate what you're running low on (see plan.topUp). */
-async function runTopUp(env: Env, now = Date.now()): Promise<{ made: string[]; errors: string[] }> {
-  const prof = await getProfile(env);
-  const gen = await allItems(env);
-  const keyOf: Record<Kind, string> = { clip: 'clip', article: 'article', scene: 'scene', cards: 'cards' };
+export type RunResult = { at: number; made: string[]; errors: string[]; skipped: string[] };
+
+/** Generate what you're running low on (see plan.topUp). The caller holds the lease. */
+async function runTopUp(env: Env, owner: string, now = Date.now()): Promise<RunResult> {
+  const prof = await db.getProfile(env.DB);
+  const gen = await db.itemIndex(env.DB);
+  const ids = (k: Kind) => gen.filter((g) => g.kind === k && !g.hidden).map((g) => g.id); // hidden ones don't count as waiting
   const existing = {
-    clip: [...BUILTIN.clips.clips.map((c: any) => c.id), ...gen.filter((g) => g.kind === 'clip').map((g) => g.id)].map((id) => `clip:${id}`),
-    article: [...BUILTIN.articles.map((c) => c.id), ...gen.filter((g) => g.kind === 'article').map((g) => g.id)].map((id) => `article:${id}`),
-    scene: [...BUILTIN.scenes.map((c) => c.id), ...gen.filter((g) => g.kind === 'scene').map((g) => g.id)].map((id) => `scene:${id}`),
+    clip: [...BUILTIN.clips.clips.map((c: any) => c.id), ...ids('clip')].map((id) => `clip:${id}`),
+    article: [...BUILTIN.articles.map((c) => c.id), ...ids('article')].map((id) => `article:${id}`),
+    scene: [...BUILTIN.scenes.map((c) => c.id), ...ids('scene')].map((id) => `scene:${id}`),
     cards: [],
   } as Record<Kind, string[]>;
   const kinds = topUp({ existing, made: gen.map((g) => ({ kind: g.kind, created_at: g.created_at })), used: new Set(prof.used), caps: caps(env), now });
-  const made: string[] = [], errors: string[] = [];
+  const made: string[] = [], errors: string[] = [], skipped: string[] = [];
   for (const k of kinds) {
-    try { made.push((await generate(env, keyOf[k] as Kind, now)).id); } catch (e) { errors.push(`${k}: ${e instanceof Error ? e.message : String(e)}`); }
+    await db.renewLock(env.DB, owner);
+    try { made.push((await generate(env, k, now)).id); } catch (e) { (e instanceof SkipError ? skipped : errors).push(`${k}: ${message(e)}`); }
   }
-  return { made, errors };
+  await db.pruneAttempts(env.DB);
+  const run = { at: Date.now(), made, errors, skipped };
+  await db.setState(env.DB, 'lastRun', run);
+  return run;
 }
 
 // ---------- routes ----------
-async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+async function route(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   const p = url.pathname;
   if (p === '/api/health') return json({ ok: true });
   if (!(await authorized(req, env))) return json({ error: 'Wrong or missing app password.' }, 401);
 
+  // New and changed items. Contract for the app (js/server.js):
+  // - send since = the newest created_at you have (0 at first) and optionally limit (default 100, max 200);
+  // - you get visible items with created_at >= since, oldest first (drop ids you already have),
+  //   and items hidden since then as { id, kind, created_at, hidden: true }: drop those;
+  // - when more is true the page was full: ask again with since = the newest created_at you now have.
   if (p === '/api/items' && req.method === 'GET') {
-    return json({ items: await allItems(env, Number(url.searchParams.get('since')) || 0), now: Date.now() });
+    const since = Math.max(0, Number(url.searchParams.get('since')) || 0);
+    const limit = Math.min(200, Math.max(1, Math.floor(Number(url.searchParams.get('limit')) || 100)));
+    return json({ ...(await db.itemsSince(env.DB, since, limit)), now: Date.now() });
+  }
+  const hide = p.match(/^\/api\/items\/([\w-]+)$/);
+  if (hide && req.method === 'DELETE') {
+    // Hide a bad item on every device (it stays in the database).
+    return (await db.hideItem(env.DB, hide[1])) ? json({ ok: true }) : json({ error: 'No such item' }, 404);
   }
   if (p === '/api/profile' && req.method === 'PUT') {
+    if (Number(req.headers.get('Content-Length')) > PROFILE_MAX) return json({ error: 'Profile too large' }, 413);
     const text = await req.text();
-    if (text.length > 1_500_000) return json({ error: 'Profile too large' }, 413);
+    if (text.length > PROFILE_MAX) return json({ error: 'Profile too large' }, 413);
     let body: any;
     try { body = JSON.parse(text); } catch { return json({ error: 'Not JSON' }, 400); }
-    const profile: Profile = {
-      events: (Array.isArray(body.events) ? body.events : []).slice(-3000),
-      used: (Array.isArray(body.used) ? body.used : []).filter((x: unknown) => typeof x === 'string').slice(-2000),
-      mistakes: (Array.isArray(body.mistakes) ? body.mistakes : []).slice(0, 500).map((m: any) => ({ at: Number(m.at) || 0, category: String(m.category || '').slice(0, 40) })),
-      updatedAt: Date.now(),
-    };
-    await env.DB.prepare('INSERT INTO state (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at')
-      .bind('profile', JSON.stringify(profile), Date.now()).run();
+    await db.setState(env.DB, 'profile', cleanProfile(body, Date.now()));
     return json({ ok: true });
   }
   if (p === '/api/status' && req.method === 'GET') {
-    const gen = await allItems(env);
-    const count = Object.fromEntries(KINDS.map((k) => [k, gen.filter((g) => g.kind === k).length]));
-    return json({ ok: true, model: env.MODEL, usage: await usageThisMonth(env), ttsLimit: Number(env.TTS_MONTHLY_CHARS) || 0, caps: caps(env), generated: count });
+    const [usage, count, lastRun] = await Promise.all([db.usageThisMonth(env.DB), db.countByKind(env.DB), db.getState<RunResult>(env.DB, 'lastRun')]);
+    const lim = claudeLimits(env);
+    return json({
+      ok: true, model: env.MODEL, usage, ttsLimit: Number(env.TTS_MONTHLY_CHARS) || 0,
+      claude: { input: usage.claude_input || 0, output: usage.claude_output || 0, inputLimit: lim.input, outputLimit: lim.output },
+      caps: caps(env), generated: Object.fromEntries(KINDS.map((k) => [k, count[k] || 0])), lastRun,
+    });
   }
-  if (p === '/api/topup' && req.method === 'POST') return json(await runTopUp(env));
+  if (p === '/api/topup' && req.method === 'POST') {
+    const res = await withLock(env, async (owner) => {
+      if (!(await db.rateOk(env.DB, 'topup:last', TOPUP_EVERY))) return json({ error: 'New content was checked less than 10 minutes ago, try again later.' }, 429);
+      return json(await runTopUp(env, owner));
+    });
+    return res || json({ error: BUSY }, 409);
+  }
   if (p === '/api/generate' && req.method === 'POST') {
     let kind: Kind;
     try { kind = (await req.json<any>()).kind; } catch { return json({ error: 'Not JSON' }, 400); }
     if (!KINDS.includes(kind)) return json({ error: 'Unknown kind' }, 400);
-    const weekAgo = Date.now() - 7 * 864e5;
-    const madeThisWeek = (await allItems(env, weekAgo)).filter((g) => g.kind === kind).length;
-    if (madeThisWeek >= caps(env)[kind]) return json({ error: `This week's budget for new ${kind}s is used up.` }, 429);
-    try { return json({ item: await generate(env, kind) }); } catch (e) { return json({ error: e instanceof Error ? e.message : String(e) }, 502); }
+    if ((await db.madeSince(env.DB, kind, Date.now() - 7 * 864e5)) >= caps(env)[kind]) return json({ error: `This week's budget for new ${LABEL[kind]} is used up.` }, 429);
+    const res = await withLock(env, async () => {
+      try { return json({ item: await generate(env, kind) }); } catch (e) { return json({ error: message(e) }, e instanceof SkipError ? 429 : 502); }
+    });
+    return res || json({ error: BUSY }, 409);
   }
-  const m = p.match(/^\/api\/audio\/([\w-]+)\/(\d+)$/);
+  // Clip audio. /api/audio/{clipId}/{i}/{hash}: hash = tts.segHash of the segment as the app
+  // knows it; a stale hash gets 409, so the immutable cache only ever holds the right audio.
+  // /api/audio/{clipId}/{i} (older app versions): same audio, but not cached as immutable.
+  const m = p.match(/^\/api\/audio\/([\w-]+)\/(\d+)(?:\/([0-9a-f]{8}))?$/);
   if (m && req.method === 'GET') {
-    const clip = findClip(m[1], await allItems(env));
+    const clip = await findClip(env, m[1]);
     if (!clip) return json({ error: 'No such clip' }, 404);
+    const i = Number(m[2]), seg = clip.segments?.[i];
+    if (m[3] && seg && m[3] !== segHash(seg.text, env.TTS_MODEL)) return json({ error: 'This clip has changed; reload it.' }, 409);
     try {
-      const buf = await segmentAudio(env, clip, Number(m[2]));
-      return new Response(buf, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'private, max-age=31536000, immutable' } });
+      const buf = await segmentAudio(env, clip, i);
+      return new Response(buf, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': m[3] ? 'private, max-age=31536000, immutable' : 'private, no-cache' } });
     } catch (e) {
       const status = e instanceof TtsError ? (e.status === 429 || e.status === 404 ? e.status : 502) : 500;
-      return json({ error: e instanceof Error ? e.message : String(e) }, status);
+      return json({ error: message(e) }, status);
     }
   }
   return json({ error: 'Not found' }, 404);
 }
 
 export default {
-  async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(req: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const c = cors(req, env);
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: c });
     let res: Response;
-    try { res = await route(req, env, ctx); } catch (e) { console.log('error', String(e)); res = json({ error: 'Server error' }, 500); }
+    try { res = await route(req, env); } catch (e) { console.log('error', String(e)); res = json({ error: 'Server error' }, 500); }
     const h = new Headers(res.headers);
     for (const [k, v] of Object.entries(c)) h.set(k, v);
     return new Response(res.body, { status: res.status, headers: h });
   },
   async scheduled(_ev: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(runTopUp(env).then((r) => console.log('top-up', JSON.stringify(r))));
+    // Nightly top-up; skipped when a run (manual or the previous night's) still holds the lease.
+    ctx.waitUntil(withLock(env, (owner) => runTopUp(env, owner))
+      .then((r) => console.log('top-up', r ? JSON.stringify(r) : 'skipped: already running'))
+      .catch((e) => console.log('top-up failed', String(e))));
   },
 } satisfies ExportedHandler<Env>;

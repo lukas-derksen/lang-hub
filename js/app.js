@@ -421,11 +421,18 @@ function applyNewContent() {
 addEventListener('langhub:newcontent', (e) => {
   contentStale = true;
   applyNewContent();
-  if (!contentStale) { toast(`${e.detail} new item${e.detail === 1 ? '' : 's'} written for you.`); render(); }
+  // detail 0: items loaded from this device, changed or hidden; nothing new to announce.
+  if (!contentStale) { if (e.detail) toast(`${e.detail} new item${e.detail === 1 ? '' : 's'} written for you.`); render(); }
 });
 coachViews.setReview(review);
 
-window.addEventListener('hashchange', () => { applyNewContent(); render(); view.focus({ preventScroll: true }); window.scrollTo(0, 0); });
+window.addEventListener('hashchange', () => {
+  applyNewContent();
+  render();
+  // Leaving a clip closes its player during render: the new content can load now.
+  if (contentStale) { applyNewContent(); if (!contentStale) render(); }
+  view.focus({ preventScroll: true }); window.scrollTo(0, 0);
+});
 
 // ---------- events ----------
 view.addEventListener('click', (e) => {
@@ -533,6 +540,9 @@ setInterval(() => {
 // Re-render when returning to the app (e.g. the next day, or after the phone slept).
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { markCelebrated(); render(); } });
 
+// Downloaded server items live in IndexedDB: wait briefly so the first screen includes them
+// (if they take longer, the screens reload when they arrive).
+await server.whenLoaded(800);
 render();
 server.start();
 
