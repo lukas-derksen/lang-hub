@@ -1,6 +1,8 @@
 // Clip audio: voiced once with ElevenLabs, kept in KV, served to every device.
 // Same model and voice settings as the app (js/listen.js), so clips sound the same.
-export const VOICE_SETTINGS = { stability: 0.4, similarity_boost: 0.8, style: 0.25, speed: 1.0 };
+// Similarity 0.7 (not higher) so a voice's recording noise isn't copied; style 0 as
+// ElevenLabs recommends (anything else makes the model less stable).
+export const VOICE_SETTINGS = { stability: 0.5, similarity_boost: 0.7, style: 0, speed: 1.0, use_speaker_boost: true };
 
 /** FNV-1a 32-bit hash as 8 hex digits, matching js/listen.js. */
 export function fnv1a(str: string): string {

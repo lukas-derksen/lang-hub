@@ -25,6 +25,8 @@ function mockSdk() {
   navigator.mediaDevices.getUserMedia = async () => ({ getTracks: () => [{ stop() {} }] });
   const M = (window.__mock = { sessions: [] });
   window.ElevenLabsClient = { Conversation: { async startSession(o) {
+    M.attempts = (M.attempts || 0) + 1;
+    if (M.failWebrtc && o.connectionType === 'webrtc') throw new Error('could not establish pc connection');
     const s = { o, ended: false,
       endSession: async () => { if (s.ended) return; s.ended = true; o.onDisconnect?.({ reason: 'user' }); },
       sendUserMessage() {}, sendContextualUpdate() {}, setMicMuted() {} };
@@ -45,6 +47,7 @@ const check = (cond, msg) => { console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}`); 
   const ctx = await browser.newContext();
   await ctx.route('https://api.elevenlabs.io/**', (route) => {
     const u = route.request().url();
+    if (u.includes('/convai/conversation/token')) return route.fulfill({ json: { token: 'test-token' } });
     if (u.includes('get-signed-url')) return route.fulfill({ json: { signed_url: 'wss://api.elevenlabs.io/test' } });
     if (u.includes('/user/subscription')) return route.fulfill({ json: { character_count: 1000, character_limit: 100000, tier: 'creator' } });
     return route.fulfill({ status: 404, body: '' });
@@ -94,6 +97,8 @@ const check = (cond, msg) => { console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}`); 
   await page.click('[data-action=call-scene] >> nth=0');
   await page.waitForFunction(() => location.hash === '#/call' && window.__mock.sessions.length === 1);
   const ov = await page.evaluate(() => window.__mock.sessions[0].o.overrides);
+  const how = await page.evaluate(() => { const o = window.__mock.sessions[0].o; return { type: o.connectionType, token: o.conversationToken, url: o.signedUrl }; });
+  check(how.type === 'webrtc' && how.token === 'test-token' && !how.url, `call connects over WebRTC with a conversation token (${JSON.stringify(how)})`);
   check(ov?.conversation?.maxDurationSeconds > 0 && ov.conversation.maxDurationSeconds <= 20 * 60 + 30, `call sends a max duration (${ov?.conversation?.maxDurationSeconds}s)`);
   await page.waitForTimeout(300);
   await page.click('[data-action=end-call]');
@@ -298,6 +303,22 @@ const check = (cond, msg) => { console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}`); 
     await page.waitForTimeout(100);
     const v = await page.evaluate(() => { const all = window.__csp.splice(0); const mine = all.filter((x) => x.includes('someone-else')); window.__csp.push(...all.filter((x) => !x.includes('someone-else'))); return mine; });
     check(blocked === 'blocked' && v.length === 1 && /^connect-src/.test(v[0]), `a fetch to another workers.dev host is blocked by the CSP (${v.join(', ')})`);
+  }
+
+  // When WebRTC can't connect, the call falls back to WebSocket with a signed URL.
+  {
+    const p2 = await ctx.newPage();
+    p2.on('pageerror', (e) => errors.push(e.message));
+    await p2.addInitScript(mockSdk);
+    await p2.addInitScript(() => { window.__mock.failWebrtc = true; });
+    await p2.goto(`${BASE}#/speak`);
+    await p2.waitForSelector('[data-action=call-scene]:not([disabled])');
+    await p2.click('[data-action=call-scene] >> nth=0');
+    await p2.waitForFunction(() => location.hash === '#/call' && window.__mock.sessions.length === 1, null, { timeout: 5000 }).catch(() => {});
+    const fb = await p2.evaluate(() => { const s = window.__mock.sessions[0]; return { attempts: window.__mock.attempts, type: s?.o.connectionType, url: s?.o.signedUrl }; });
+    check(fb.attempts === 2 && fb.type === 'websocket' && fb.url === 'wss://api.elevenlabs.io/test', `a failed WebRTC call retries over WebSocket (${JSON.stringify(fb)})`);
+    if (fb.type) { await p2.click('[data-action=end-call]'); await p2.waitForFunction(() => location.hash === '#/recap'); }
+    await p2.close();
   }
 
   const csp = [...cspSeen, ...await page.evaluate(() => window.__csp)];

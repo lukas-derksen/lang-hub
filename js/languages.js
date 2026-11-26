@@ -25,14 +25,17 @@ General rules:
 - Messages that start with [APP] come from the learning app, not the learner. Follow them silently without mentioning the app.`,
       // Voices the coach can speak with (Settings → Coach voice). The first is the
       // default. Each one gets its own name and home town, so the persona fits.
+      // `voice` is the ElevenLabs voice behind it. Prefer voices from the library's
+      // "High quality" category: voices cloned from home recordings carry their
+      // room noise and narrow, phone-like sound into everything they say.
       voices: [
-        { key: 'simona', id: 'HKiPKi8GDXhcIoBzK4ZE', name: 'Elena', voice: 'Simona', gender: 'female', city: 'Bologna', accent: 'Standard Italian' },
+        { key: 'simona', id: 'UnOINkXZ3yK4vVg3Iayj', name: 'Elena', voice: 'Beatrice', gender: 'female', city: 'Bologna', accent: 'Standard Italian' },
         { key: 'giulia', id: 'uC9VI5XrTxXRNlCzGSKR', name: 'Giulia', voice: 'Giulia', gender: 'female', city: 'Verona', accent: 'Standard Italian' },
-        { key: 'paolo', id: '4W8fSCDzySFWZZDHotZN', name: 'Paolo', voice: 'Paolo', gender: 'male', city: 'Torino', accent: 'Standard Italian' },
-        { key: 'roberta', id: 'BrADZHWW7Di4Z7YPNjmK', name: 'Roberta', voice: 'Roberta', gender: 'female', city: 'Roma', accent: 'Rome' },
+        { key: 'paolo', id: '1s5ETcPtsJ9W2cUUQrDb', name: 'Paolo', voice: 'Luca', gender: 'male', city: 'Torino', accent: 'Standard Italian' },
+        { key: 'roberta', id: '2bMAiYn9nNnA5AepoHYR', name: 'Roberta', voice: 'Sabrina', gender: 'female', city: 'Roma', accent: 'Rome' },
         { key: 'alice', id: 'yqYUuLveKQAg3xn3wYbI', name: 'Alice', voice: 'Alice', gender: 'female', city: 'Milano', accent: 'Milan' },
-        { key: 'gianni', id: 'EgL698ysMZ8wysqxqSEz', name: 'Gianni', voice: 'Gianni', gender: 'male', city: 'Milano', accent: 'Milan' },
-        { key: 'bernardo', id: 'TpjKmVjyMxPMjyG4qG5h', name: 'Bernardo', voice: 'Bernardo', gender: 'male', city: 'Firenze', accent: 'Florence' },
+        { key: 'gianni', id: 'nH7uLS5UdEnvKEOAXtlQ', name: 'Gianni', voice: 'Vittorio', gender: 'male', city: 'Milano', accent: 'Milan' },
+        { key: 'bernardo', id: 'GRjgv3Z8Gg3RY82Qo6FW', name: 'Bernardo', voice: 'Mike', gender: 'male', city: 'Firenze', accent: 'Florence' },
         { key: 'tatiana', id: '0agAAs6kdPUv4MFeK9wx', name: 'Tatiana', voice: 'Tatiana', gender: 'female', city: 'Napoli', accent: 'Naples, stronger accent' },
         { key: 'lodovico', id: 'uA5aGNikV4gcPbh3C2IT', name: 'Lodovico', voice: 'Lodovico', gender: 'male', city: 'Palermo', accent: 'Sicily, stronger accent' },
       ],
