@@ -4,6 +4,7 @@ import { lang } from './languages.js';
 import * as coachViews from './coachviews.js';
 import * as listen from './listen.js';
 import * as review from './review.js';
+import * as picks from './picks.js';
 
 const L = () => lang(store.get().settings.language);
 
@@ -122,6 +123,7 @@ function viewToday() {
     </div>
   </section>
   ${backupReminder()}
+  ${picks.picksSection()}
 
   <h2 class="section-title">Today's session</h2>
   <div class="blocks">${order.map((k) => blockCard(k)).join('')}</div>
@@ -225,6 +227,7 @@ function viewProgress() {
     <p class="legend muted"><span class="hm l0"></span> none <span class="hm l2"></span> some <span class="hm l4"></span> full goal</p>
   </div>
   ${review.trendsCard()}
+  ${picks.learnedCard()}
   ${coachViews.usageCard()}
   <div class="card">
     <h3>Time per skill</h3>
@@ -391,6 +394,7 @@ function render() {
 coachViews.init({ render, toast, blockCard, sectionPage, L, esc, mmss });
 listen.init({ render, toast, blockCard, L, esc, mmss });
 review.init({ render, toast, L, esc });
+picks.init({ render, toast, L, esc });
 coachViews.setReview(review);
 
 window.addEventListener('hashchange', () => { render(); view.focus({ preventScroll: true }); window.scrollTo(0, 0); });

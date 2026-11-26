@@ -31,6 +31,8 @@ const DEFAULTS = {
   listening: {}, // clipId -> { best, dict, tries, last }
   drills: [],   // { at, cards, right, seconds }
   reports: [],  // { at, days, cats: { category: rate } }
+  events: [],   // engagement for personal picks, see js/recommend.js: { at, item, topics, type, w?, skill?, d?, perf? }
+  picks: null,  // { day, slots: { listen: [{ key, reason }], ... }, idx: { listen: 0 } } — today's picks
 };
 
 const VERSION = DEFAULTS.version;
@@ -109,6 +111,8 @@ function merge(base, data) {
     listening: isObj(data.listening) ? data.listening : {},
     drills: Array.isArray(data.drills) ? data.drills : [],
     reports: Array.isArray(data.reports) ? data.reports : [],
+    events: Array.isArray(data.events) ? data.events.filter(isObj) : [],
+    picks: isObj(data.picks) ? data.picks : null,
   };
 }
 
@@ -324,7 +328,7 @@ export function validateBackup(data) {
   if ((data.version || 1) > VERSION) throw new Error('This backup is from a newer version of Lang Hub. Update the app first.');
   if (!isObj(data.days)) bad('no days');
   if (Object.values(data.days).some((d) => !isObj(d))) bad('bad day entry');
-  for (const k of ['mistakes', 'calls', 'drills', 'reports']) if (data[k] !== undefined && !Array.isArray(data[k])) bad(`${k} is not a list`);
+  for (const k of ['mistakes', 'calls', 'drills', 'reports', 'events']) if (data[k] !== undefined && !Array.isArray(data[k])) bad(`${k} is not a list`);
   for (const k of ['settings', 'listening']) if (data[k] !== undefined && !isObj(data[k])) bad(`bad ${k}`);
   if (data.settings?.plan !== undefined && !isObj(data.settings.plan)) bad('bad plan');
   if (data.settings?.readDays !== undefined && !Array.isArray(data.settings.readDays)) bad('bad reading days');
@@ -442,3 +446,33 @@ export function callSecondsToday() {
   const today = dayKey();
   return state.calls.filter((c) => dayKey(new Date(c.at)) === today).reduce((a, c) => a + (c.seconds || 0), 0);
 }
+
+// ---- engagement, for personal picks (js/recommend.js) ----
+const MAX_EVENTS = 3000;
+const RATE_WINDOW = 6 * 3600e3;
+
+/** Record what you did with an item. `e` = { item, topics, type, w?, skill?, d?, perf? }. */
+export function logEvent(e) {
+  if (!e?.item) return;
+  const ev = { at: Date.now(), ...e, topics: Array.isArray(e.topics) ? e.topics.slice(0, 6) : [] };
+  // A rating replaces your earlier rating of the same kind for that item (changed your mind).
+  if (e.type === 'rate' || e.type === 'rate-level') {
+    state.events = state.events.filter((x) => !(x.item === e.item && x.type === e.type && ev.at - x.at < RATE_WINDOW));
+  }
+  state.events.push(ev);
+  if (state.events.length > MAX_EVENTS) state.events.splice(0, state.events.length - MAX_EVENTS);
+  save();
+}
+
+/** Your latest rating of each kind for an item in the last few hours: { rate, level }. */
+export function recentRating(item) {
+  const now = Date.now(), out = {};
+  for (const x of state.events) {
+    if (x.item !== item || now - x.at >= RATE_WINDOW) continue;
+    if (x.type === 'rate') out.rate = x.value;
+    if (x.type === 'rate-level') out.level = x.value;
+  }
+  return out;
+}
+
+export function setPicks(p) { state.picks = p; save(); }

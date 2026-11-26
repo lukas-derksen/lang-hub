@@ -56,6 +56,14 @@ Progress is stored in the browser's `localStorage` on each device. Use **Setting
 - If the browser cleared a clip's audio (for example to free space), the app asks before voicing it again and says roughly how many credits it costs. The list of clips voiced on this device is in `localStorage` (`langhub.voiced`), not in the backup.
 - Speed changes are done in the browser (pitch preserved), so they cost nothing. Distracted mode noise (café, street, TV) is synthesised in the browser; the "chatter" is the clip itself played backwards, so it sounds like speech but can't be understood.
 
+## Personal picks
+
+- Today shows one pick for the speaking (or reading) block and one for listening, each with a one-line reason and a *Something else* button. Picks are chosen once a day and kept.
+- Every scene, clip, article and card has `topics` and a CEFR `level` in `content/<lang>/`. Topic names are listed in `js/recommend.js`.
+- The app learns from what you do, stored as `events` in your progress data (and in the backup): finishing or replaying a clip, leaving one halfway, how long and how much you talked in a call, *Something else*, and the *How was it?* card (liked it or not, and too easy, just right or too hard). Liking and difficulty are kept apart.
+- Ranking (`js/recommend.js`, pure functions with tests): interest per topic fades with a three-week half-life; items are aimed slightly above your estimated level per skill; recently done items rest, hard ones come back after a few days; about a quarter of picks explore topics with little data; practical topics (health, errands, travel, home) come up at least every two weeks; a topic you liked in the last three days is followed up. Conversation cards lean toward topics you enjoy.
+- Progress → *What the app has learned* shows the topic scores and level estimates.
+
 ## Security
 
 `index.html` sets a Content Security Policy:

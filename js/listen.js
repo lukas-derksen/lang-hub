@@ -1,6 +1,8 @@
 // Listening trainer: clips voiced by ElevenLabs on first play (with your key),
 // cached on this device, played with speed control and optional background noise.
 import * as store from './store.js';
+import { levelNum } from './recommend.js';
+import { ratingCard } from './picks.js';
 
 let H = {};
 export function init(helpers) { H = helpers; }
@@ -246,9 +248,16 @@ const prefs = { speed: 1, distracted: false, noiseKind: 'cafe', level: 0.5 };
 let player = null; // { clipId, audio, url, buffer }
 let answers = {};  // per-clip in-progress answers { picks: {}, checked, dictation, dictChecked }
 
+/** What the app knows about a clip for personal picks. */
+const itemOf = (c) => ({ key: `clip:${c.id}`, topics: c.topics || [], d: levelNum(c.level), skill: 'listen' });
+const logClip = (c, e) => store.logEvent({ item: `clip:${c.id}`, topics: c.topics || [], ...e });
+
 function cleanupPlayer() {
   stopNoise();
-  if (player) { player.audio.pause(); URL.revokeObjectURL(player.url); player = null; }
+  if (player) {
+    // Started but left before the end, without answering: a weak sign it didn't grab you.
+    const c = data?.clips.find((x) => x.id === player.clipId);
+    if (c && player.started && !player.ended && !answers[c.id]?.checked) logClip(c, { type: 'abandon', w: -0.3 }); player.audio.pause(); URL.revokeObjectURL(player.url); player = null; }
 }
 
 // ---------- views ----------
@@ -340,7 +349,8 @@ function clipView(id) {
   <div class="card">
     <h3>Transcript</h3>
     ${unlocked ? transcript(c, a) : '<p class="muted">Unlocks once you\'ve checked your answers.</p>'}
-  </div>`;
+  </div>
+  ${unlocked ? ratingCard(itemOf(c)) : ''}`;
 }
 
 const norm = (w) => w.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9']/g, '');
@@ -376,7 +386,11 @@ function saveResult(c, a) {
   const r = st.listening[c.id] || { best: 0, dict: null, tries: 0 };
   const score = c.questions.filter((q, i) => a.picks[i] === q.answer).length;
   r.best = Math.max(r.best, score); r.tries++; r.last = Date.now();
-  if (a.dictChecked) { const w = missedWords(c.dictation, a.dictation); r.dict = Math.max(r.dict || 0, Math.round((w.filter((x) => x.ok).length / w.length) * 100)); }
+  let dict = null;
+  if (a.dictChecked) { const w = missedWords(c.dictation, a.dictation); dict = Math.round((w.filter((x) => x.ok).length / w.length) * 100); r.dict = Math.max(r.dict || 0, dict); }
+  // How well it went, for the listening level estimate (quiz and dictation averaged).
+  const parts = [score / c.questions.length, ...(dict != null ? [dict / 100] : [])];
+  logClip(c, { type: 'result', skill: 'listen', d: levelNum(c.level), perf: parts.reduce((x, y) => x + y, 0) / parts.length });
   st.listening[c.id] = r;
   store.save();
 }
@@ -392,11 +406,23 @@ async function ensurePlayer(c) {
   const url = URL.createObjectURL(toWav(buffer));
   const audio = new Audio(url);
   audio.preservesPitch = true; audio.playbackRate = prefs.speed;
-  player = { clipId: c.id, audio, url, buffer };
+  const p = { clipId: c.id, audio, url, buffer, started: false, ended: false, replays: 0 };
+  player = p;
   audio.addEventListener('timeupdate', () => updateTime());
-  audio.addEventListener('play', () => { if (!store.get().timer) store.startTimer('listen'); if (prefs.distracted) startNoise(prefs.noiseKind, prefs.level, buffer); updatePlayBtn(); });
+  audio.addEventListener('play', () => {
+    if (!store.get().timer) store.startTimer('listen');
+    if (prefs.distracted) startNoise(prefs.noiseKind, prefs.level, buffer);
+    // Playing it again after the end: you wanted more of it (counted twice at most).
+    if (p.ended && p.replays < 2) { p.replays++; logClip(c, { type: 'replay', w: 0.3 }); }
+    p.started = true;
+    updatePlayBtn();
+  });
   audio.addEventListener('pause', () => { stopNoise(); updatePlayBtn(); });
-  audio.addEventListener('ended', () => { stopNoise(); updatePlayBtn(); });
+  audio.addEventListener('ended', () => {
+    stopNoise(); updatePlayBtn();
+    if (!p.ended) logClip(c, { type: 'finish', w: 0.4 });
+    p.ended = true;
+  });
   if (status) status.textContent = '';
   return player;
 }

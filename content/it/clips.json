@@ -15,6 +15,7 @@
       "title": "Un messaggio in segreteria",
       "genre": "Voicemail",
       "level": "B1",
+      "topics": ["services"],
       "segments": [
         { "voice": "roberta", "text": "Ciao, sono Chiara! Senti, ti chiamo per sabato sera. Allora, è successo un casino: il ristorante che avevamo prenotato ha chiuso, cioè, proprio chiuso per sempre, l'ho scoperto stamattina passando davanti. Quindi ho pensato... che ne dici di andare in quella pizzeria a Trastevere, quella dove siamo stati a maggio? Però lì non prendono prenotazioni dopo le otto, quindi dovremmo vederci alle otto e mezza direttamente lì, invece che alle otto. Ah, e un'altra cosa: viene anche Marco, se per te va bene. Fammi sapere entro domani, perché se no gli altri si organizzano diversamente. Dai, un bacio, ciao ciao!" }
       ],
@@ -30,6 +31,7 @@
       "title": "Annunci in stazione",
       "genre": "Announcement",
       "level": "B1",
+      "topics": ["travel", "services"],
       "segments": [
         { "voice": "paolo", "text": "Attenzione. Il treno Frecciarossa novemilacinquecentoquarantadue, delle ore diciotto e dieci, per Milano Centrale, viaggia con un ritardo previsto di venticinque minuti. Il treno è in arrivo al binario dodici, anziché al binario sette. Ci scusiamo per il disagio." },
         { "voice": "paolo", "text": "Avviso ai signori viaggiatori. A causa di uno sciopero del personale, il treno regionale delle ore diciotto e trentacinque per Bologna è stato soppresso. È disponibile un servizio di bus sostitutivo, con partenza dal piazzale esterno della stazione, lato via Garibaldi, alle ore diciotto e cinquanta. I biglietti già acquistati sono validi sul bus." }
@@ -46,6 +48,7 @@
       "title": "Al mercato",
       "genre": "Dialogue",
       "level": "B1",
+      "topics": ["food", "everyday"],
       "segments": [
         { "voice": "gianni", "text": "Buongiorno signora! Cosa le do oggi? Guardi che pomodori, sono arrivati stamattina." },
         { "voice": "alice", "text": "Buongiorno! Eh, sono belli, sì. Quanto vengono al chilo?" },
@@ -67,6 +70,7 @@
       "title": "Previsioni per il fine settimana",
       "genre": "Weather",
       "level": "B1",
+      "topics": ["everyday", "travel"],
       "segments": [
         { "voice": "bernard", "text": "Buonasera e ben trovati. Vediamo che tempo ci aspetta per il fine settimana. Sabato al Nord avremo cieli coperti e piogge diffuse, soprattutto in Liguria e in Piemonte, dove non si escludono temporali anche forti nel pomeriggio. Al Centro la giornata comincerà con qualche nuvola, ma dal pomeriggio tornerà il sole, con temperature in leggero aumento. Al Sud e sulle isole, invece, sarà un sabato quasi estivo, con punte di ventisei gradi in Sicilia. Domenica il quadro cambia: le piogge si spostano verso il Centro, mentre al Nord il cielo si rasserena, ma attenzione al vento freddo e alle temperature in calo, soprattutto la sera." }
       ],
@@ -82,6 +86,7 @@
       "title": "Il mio primo giorno di lavoro",
       "genre": "Story",
       "level": "B1–B2",
+      "topics": ["work"],
       "segments": [
         { "voice": "lodovico", "text": "Allora, il mio primo giorno di lavoro a Milano non lo dimenticherò mai. Io sono di Catania, e appena laureato ho trovato lavoro in un'agenzia di comunicazione. Arrivo la mattina, emozionatissimo, vestito elegante, giacca e cravatta... e tutti gli altri in jeans e scarpe da ginnastica. Già lì mi sentivo un po' fuori posto. Poi a pranzo mi invitano al bar sotto l'ufficio, e io, da buon siciliano, ordino una granita. A novembre! Mi guardavano tutti come se fossi un marziano. Ma la cosa peggiore è stata nel pomeriggio: durante una riunione ho chiamato il direttore con il nome sbagliato, per tre volte. Lui alla fine si è messo a ridere e mi ha detto: tranquillo, ci vuole un mese per imparare i nomi. Da quel giorno siamo diventati amici, e adesso ci ridiamo sopra." }
       ],
@@ -97,6 +102,7 @@
       "title": "Perché dormiamo male?",
       "genre": "Podcast",
       "level": "B2",
+      "topics": ["health"],
       "segments": [
         { "voice": "giulia", "text": "Bentornati! Oggi parliamo di una cosa che riguarda praticamente tutti: il sonno. Secondo una ricerca recente, quasi un italiano su tre dorme meno di sei ore a notte. E il colpevole, lo sapete già, spesso è lo smartphone. Non solo per la luce blu, che in realtà conta meno di quanto si pensi, ma perché il telefono ci tiene il cervello acceso: rispondiamo a un messaggio, guardiamo un video, poi un altro, e intanto è passata un'ora. Gli esperti consigliano una cosa semplicissima, che però quasi nessuno fa: lasciare il telefono fuori dalla camera da letto, e comprarsi una vecchia sveglia. Sembra banale, eppure chi ci prova dice che dopo una settimana si addormenta prima e si sveglia meno stanco. Io ci sto provando da dieci giorni... e vi racconto com'è andata dopo la pausa." }
       ],
@@ -112,6 +118,7 @@
       "title": "Dal meccanico",
       "genre": "Dialogue",
       "level": "B1–B2",
+      "topics": ["services"],
       "segments": [
         { "voice": "tatiana", "text": "Buongiorno. Senta, la macchina fa un rumore strano quando freno, una specie di fischio. E da un paio di giorni anche lo sterzo mi sembra un po' duro." },
         { "voice": "paolo", "text": "Mm, il fischio quasi sicuramente sono le pastiglie dei freni, saranno consumate. Per lo sterzo devo dare un'occhiata, potrebbe essere niente, oppure una perdita d'olio." },
@@ -132,6 +139,7 @@
       "title": "Bologna, città a trenta all'ora",
       "genre": "Radio news",
       "level": "B2",
+      "topics": ["city", "society"],
       "segments": [
         { "voice": "paolo", "text": "Passiamo alle notizie locali. A un anno dall'introduzione del limite dei trenta chilometri orari su gran parte delle strade di Bologna, il Comune ha presentato i primi dati. Gli incidenti sono diminuiti di circa il quindici per cento, e per la prima volta da molti anni nessun pedone ha perso la vita in città. Aumentano anche le persone che si spostano in bicicletta. Ma le opinioni restano divise. Molti automobilisti e alcuni commercianti lamentano tempi di percorrenza più lunghi e multe troppo frequenti, mentre le associazioni di ciclisti chiedono di andare oltre, con più piste ciclabili protette. Il sindaco ha dichiarato che il provvedimento non verrà ritirato, ma che alcune strade principali potrebbero tornare al limite dei cinquanta." }
       ],
@@ -147,6 +155,7 @@
       "title": "La genovese di nonna",
       "genre": "Recipe",
       "level": "B1–B2",
+      "topics": ["food", "culture"],
       "segments": [
         { "voice": "tatiana", "text": "Allora, la genovese, quella vera napoletana, non c'entra niente con Genova, eh. È un sugo di cipolle e carne, e il segreto è uno solo: la pazienza. Prendete un chilo di cipolle, ma tante, mi raccomando, e tagliatele sottili sottili. Poi in una pentola mettete un po' d'olio, la carne a pezzi grossi, e fatela rosolare bene da tutti i lati. A quel punto aggiungete le cipolle, un pizzico di sale, e coprite. E adesso viene la parte importante: fuoco bassissimo, per almeno tre ore. Ogni tanto girate, e se si asciuga troppo aggiungete un goccio di vino bianco o d'acqua. Alla fine le cipolle devono diventare una crema dorata. Con questa ci condite gli ziti spezzati a mano, e la carne ve la mangiate come secondo. La domenica a casa di mia nonna era sempre così." }
       ],
@@ -162,6 +171,7 @@
       "title": "Dove andiamo in vacanza?",
       "genre": "Dialogue",
       "level": "B1–B2",
+      "topics": ["travel", "leisure"],
       "segments": [
         { "voice": "alice", "text": "Allora, hai pensato alle vacanze di agosto? Io avevo visto una casetta in Puglia, vicino a Otranto, a due passi dal mare." },
         { "voice": "lodovico", "text": "Sì, ma ad agosto in Puglia? Ci sarà un caldo assurdo, e un sacco di gente. Io quest'anno avrei voglia di montagna, sinceramente. Tipo le Dolomiti." },

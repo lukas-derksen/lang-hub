@@ -5,6 +5,8 @@
     "subtitle": "Free chat about your day, plans and interests",
     "icon": "💬",
     "minutes": 12,
+    "level": "B1",
+    "topics": ["personal", "leisure"],
     "firstMessage": "Ciao! Allora, com'è andata la giornata finora?",
     "instructions": "Free conversation like two friends catching up. Start from the learner's day, then follow whatever they find interesting: work, travel, food, plans, opinions. Every few turns ask a question that needs more than one sentence to answer (why, how, what would you do if...)."
   },
@@ -14,6 +16,8 @@
     "subtitle": "Order breakfast and chat with the barista",
     "icon": "☕",
     "minutes": 8,
+    "level": "B1",
+    "topics": ["food", "culture"],
     "firstMessage": "Buongiorno! Cosa le preparo?",
     "instructions": "Role play: you are a chatty barista in a busy bar in Bologna at 8 in the morning, the learner is a customer. Use real bar language (al banco, un cornetto vuoto/alla crema, un caffè macchiato, una spremuta, si accomodi, sono 3 euro e 20). Make small talk (weather, traffic, the learner's accent, where they're from). Include one small complication, for example you ran out of something or the card machine isn't working. Use 'Lei' at first; switch to 'tu' if the learner does."
   },
@@ -23,6 +27,8 @@
     "subtitle": "Explain symptoms and understand the advice",
     "icon": "🩺",
     "minutes": 10,
+    "level": "B1–B2",
+    "topics": ["health"],
     "firstMessage": "Buongiorno, si accomodi pure. Mi dica, cosa la porta qui oggi?",
     "instructions": "Role play: you are a family doctor (medico di base), the learner is a patient. Ask about symptoms, how long, how bad, medicines they take, allergies. Use 'Lei'. Give advice with imperatives and the subjunctive where natural (è meglio che lei riposi, prenda questo due volte al giorno). At the end check they understood by asking them to repeat what they need to do."
   },
@@ -32,6 +38,8 @@
     "subtitle": "Small talk and a small problem with a neighbour",
     "icon": "🏠",
     "minutes": 10,
+    "level": "B1",
+    "topics": ["home"],
     "firstMessage": "Ah, buonasera! Lei è il nuovo inquilino del terzo piano, vero?",
     "instructions": "Role play: you are a friendly but slightly nosy older neighbour in a condominio. Start with small talk (where are you from, what do you do, how do you find the neighbourhood). Then bring up a small issue politely: the learner's bike in the stairwell, or noise late at night, or the raccolta differenziata. Let the learner apologise, explain and negotiate. Use 'Lei'."
   },
@@ -41,6 +49,8 @@
     "subtitle": "Book a table and change the reservation",
     "icon": "📞",
     "minutes": 8,
+    "level": "B1",
+    "topics": ["services", "food"],
     "firstMessage": "Trattoria da Bruno, buonasera!",
     "instructions": "Role play on the phone: you work at a busy trattoria, the learner wants to book a table. Ask for date, time, number of people, name, phone number. The requested time is full, so offer alternatives. Halfway through, the learner (or you) needs to change something: number of people, a dietary need, or the day. Speak fast and casually like a real restaurant phone call; if the learner asks, repeat more slowly."
   },
@@ -50,6 +60,8 @@
     "subtitle": "Sort out a cancelled train",
     "icon": "🚆",
     "minutes": 8,
+    "level": "B1–B2",
+    "topics": ["travel", "services"],
     "firstMessage": "Buongiorno, mi dica.",
     "instructions": "Role play: you are an employee at the ticket office of a big Italian station. The learner's regional train has been cancelled (soppresso) because of a strike (sciopero). Explain the options: a later train, a bus replacement (bus sostitutivo), a refund (rimborso) or changing the ticket. Use realistic details (binario, coincidenza, ritardo, Frecciarossa costs more). Be polite but a bit hurried."
   },
@@ -59,6 +71,8 @@
     "subtitle": "Defend an opinion on a current topic",
     "icon": "🗣",
     "minutes": 12,
+    "level": "B2",
+    "topics": ["society"],
     "firstMessage": "Senti, ti faccio una domanda un po' provocatoria. Secondo te, le città dovrebbero vietare le auto in centro?",
     "instructions": "Debate practice. Ask the learner's opinion on the topic in your first message, then gently play devil's advocate so they have to justify, concede and counter-argue. Encourage connectors (secondo me, però, tuttavia, dal momento che, anche se, comunque) and the subjunctive after opinion verbs (penso che sia...). After about 6 minutes, move to a related but different topic."
   }
