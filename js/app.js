@@ -40,7 +40,8 @@ function ring(pct, size = 132, stroke = 12) {
 // ---------- block card (used on Today and section pages) ----------
 function blockCard(skill, { compact = false } = {}) {
   const s = store.get();
-  const goal = s.settings.plan[skill] * 60;
+  const plan = store.planFor();
+  const goal = plan[skill] * 60;
   const done = store.daySeconds()[skill];
   const running = s.timer?.skill === skill;
   const bonus = goal === 0;
@@ -54,7 +55,7 @@ function blockCard(skill, { compact = false } = {}) {
         <strong>${meta.label}</strong>${bonus ? '<span class="muted">Bonus, no daily goal</span>' : ''}
       </div>
       <span class="block-time" data-live="${skill}">${mmss(Math.min(done, 359999))}</span>
-      ${bonus ? '' : `<span class="muted block-goal">/ ${s.settings.plan[skill]} min</span>`}
+      ${bonus ? '' : `<span class="muted block-goal">/ ${plan[skill]} min</span>`}
     </div>
     ${bonus ? '' : `<div class="bar"><span style="width:${pct * 100}%"></span></div>`}
     <div class="block-actions">
@@ -75,9 +76,10 @@ function viewToday() {
   const target = store.targetMinutes() * 60;
   const streak = store.streak();
   const pct = target ? total / target : 0;
-  const order = Object.keys(SKILLS).filter((k) => s.settings.plan[k] > 0);
-  const bonus = Object.keys(SKILLS).filter((k) => !(s.settings.plan[k] > 0));
-  const next = order.find((k) => d[k] < s.settings.plan[k] * 60);
+  const plan = store.planFor();
+  const order = Object.keys(SKILLS).filter((k) => plan[k] > 0);
+  const bonus = Object.keys(SKILLS).filter((k) => !(plan[k] > 0));
+  const next = order.find((k) => d[k] < plan[k] * 60);
 
   return `
   <section class="hero">
@@ -107,9 +109,9 @@ function weekStrip() {
   const days = [];
   const d = new Date();
   d.setDate(d.getDate() - 6);
-  const target = store.targetMinutes() * 60;
   for (let i = 0; i < 7; i++) {
     const key = store.dayKey(d);
+    const target = store.targetMinutes(key) * 60;
     const t = store.totalSeconds(store.daySeconds(key));
     days.push({ key, label: d.toLocaleDateString('en-GB', { weekday: 'narrow' }), pct: target ? Math.min(1, t / target) : 0, min: mins(t), today: i === 6 });
     d.setDate(d.getDate() + 1);
@@ -144,7 +146,8 @@ function sectionPage(skill, intro, comingSoon, interim) {
 const viewSpeak = () => sectionPage('speak',
   'Speak out loud every day, so grammar and vocabulary come out without thinking.',
   [`Live conversations and role plays with a ${L().name} voice partner (bar, doctor, neighbours, phone calls).`,
-    'A recap after each conversation, with your mistakes saved to your personal log.'],
+    'A recap after each conversation, with your mistakes saved to your personal log.',
+    'Conversation cards (extra): 10 to 20 cards with a question or topic. Some need a sentence or two, others invite you to go in depth, and the coach follows up like your tutor does. For days when you have time and credits to spare.'],
   `<p>Run the timer while you practise speaking: shadow a podcast out loud, describe your day, or prepare for your lesson with your tutor.</p>
    <p class="muted">Tip: record yourself for a minute and listen back. It's uncomfortable, and it works.</p>`);
 
@@ -157,7 +160,8 @@ const viewListen = () => sectionPage('listen',
 
 const viewRead = () => sectionPage('read',
   'Read something with real depth, then talk it through, to check you understood the meaning and not just the words.',
-  ['An article with some depth (culture, society, science, opinion), pitched just above your level.',
+  ['On your reading days (Monday and Thursday by default) this replaces the speaking block.',
+    'An article with some depth (culture, society, science, opinion), pitched just above your level.',
     'Straight after reading, a live conversation with a coach who asks what it was about, what the author meant, and what you think, and pushes you to use the article\'s vocabulary.',
     'New words and phrases from the article added to your review drills.'],
   `<p>Run the timer while you read a longer article in ${L().name}, for example from a newspaper or magazine you like. Afterwards, summarise it out loud in two minutes without looking.</p>`);
@@ -179,13 +183,13 @@ function viewProgress() {
   const daysPracticed = new Set([...keys.filter((k) => store.totalSeconds(store.daySeconds(k)) > 0)]).size;
 
   // 12-week heatmap, Monday-first columns
-  const target = store.targetMinutes() * 60;
   const end = new Date();
   const start = new Date(); start.setDate(start.getDate() - 7 * 12 + 1);
   start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); // back to Monday
   const cells = [];
   for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const key = store.dayKey(d);
+    const target = store.targetMinutes(key) * 60;
     const t = store.totalSeconds(store.daySeconds(key));
     const lvl = t === 0 ? 0 : t >= target ? 4 : t >= target * 0.66 ? 3 : t >= target * 0.33 ? 2 : 1;
     cells.push(`<span class="hm l${lvl}" title="${key}: ${mins(t)} min"></span>`);
@@ -229,13 +233,19 @@ function viewSettings() {
   <form class="card" id="plan-form">
     <h3>Daily routine</h3>
     <p class="muted">Minutes per skill each day. Your streak counts days where you reach the total. Set a skill to 0 to keep it as an extra without a goal.</p>
-    ${Object.keys(SKILLS).map((k) => `
+    ${store.BASE_SKILLS.map((k) => `
       <label class="field">
         <span>${SKILLS[k].icon} ${SKILLS[k].label}</span>
         <input type="number" name="${k}" min="0" max="180" step="1" value="${p[k]}" inputmode="numeric">
         <span class="muted">min</span>
       </label>`).join('')}
-    <p class="muted">Total: <strong id="plan-total">${store.targetMinutes()}</strong> min a day</p>
+    <p class="muted">Total: <strong id="plan-total">${store.BASE_SKILLS.reduce((a, k) => a + (p[k] || 0), 0)}</strong> min a day</p>
+    <h3>Reading days</h3>
+    <p class="muted">On these days, Read + discuss takes the speaking slot.</p>
+    <div class="days">${[1, 2, 3, 4, 5, 6, 0].map((n) => `
+      <label class="day-chip"><input type="checkbox" name="readDay" value="${n}" ${store.get().settings.readDays.includes(n) ? 'checked' : ''}>
+      <span>${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][n]}</span></label>`).join('')}
+    </div>
     <button class="btn btn-primary" type="submit">Save</button>
   </form>
   <div class="card">
@@ -304,14 +314,15 @@ function bindView(r) {
   if (r !== 'settings') return;
   const form = $('#plan-form');
   form.addEventListener('input', () => {
-    const t = [...form.querySelectorAll('input')].reduce((a, i) => a + (parseInt(i.value, 10) || 0), 0);
+    const t = [...form.querySelectorAll('input[type=number]')].reduce((a, i) => a + (parseInt(i.value, 10) || 0), 0);
     $('#plan-total').textContent = t;
   });
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const plan = {};
-    form.querySelectorAll('input').forEach((i) => { plan[i.name] = Math.max(0, Math.min(180, parseInt(i.value, 10) || 0)); });
-    store.setPlan(plan);
+    form.querySelectorAll('input[type=number]').forEach((i) => { plan[i.name] = Math.max(0, Math.min(180, parseInt(i.value, 10) || 0)); });
+    const readDays = [...form.querySelectorAll('input[name=readDay]:checked')].map((i) => Number(i.value));
+    store.setPlan(plan, readDays);
     toast('Routine saved.');
   });
   $('#manual-form').addEventListener('submit', (e) => {
@@ -333,8 +344,8 @@ function bindView(r) {
 // Blocks already at their goal when the app opens don't trigger a celebration.
 const celebrated = new Set();
 function markCelebrated() {
-  const s = store.get(), d = store.daySeconds();
-  for (const k in s.settings.plan) if (s.settings.plan[k] && d[k] >= s.settings.plan[k] * 60) celebrated.add(`${store.dayKey()}:${k}`);
+  const plan = store.planFor(), d = store.daySeconds();
+  for (const k in plan) if (plan[k] && d[k] >= plan[k] * 60) celebrated.add(`${store.dayKey()}:${k}`);
 }
 markCelebrated();
 
@@ -346,12 +357,12 @@ setInterval(() => {
   document.querySelectorAll(`[data-live="${sk}"]`).forEach((el) => { el.textContent = mmss(d[sk]); });
   const totalEl = document.querySelector('[data-live="total"]');
   if (totalEl) totalEl.textContent = mins(store.totalSeconds(d));
-  const goal = s.settings.plan[sk] * 60;
+  const goal = store.planFor()[sk] * 60;
   // Re-render once when a block hits its goal, and nudge the user.
   const id = `${store.dayKey()}:${sk}`;
   if (goal && d[sk] >= goal && !celebrated.has(id)) {
     celebrated.add(id);
-    toast(`${SKILLS[sk].label}: ${s.settings.plan[sk]} min done! 🎉`);
+    toast(`${SKILLS[sk].label}: ${goal / 60} min done! 🎉`);
     try { navigator.vibrate?.([120, 60, 120]); } catch (e) { /* ignore */ }
     render();
   }

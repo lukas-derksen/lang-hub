@@ -18,8 +18,10 @@ const DEFAULTS = {
   version: 1,
   settings: {
     language: DEFAULT_LANGUAGE,
-    // Minutes per day. A skill set to 0 is shown as a bonus without a goal.
-    plan: { speak: 12, listen: 12, read: 0, review: 6 },
+    // Base minutes per day. On reading days, Read + discuss takes the
+    // speaking slot, so the day stays the same length.
+    plan: { speak: 12, listen: 12, review: 6 },
+    readDays: [1, 4], // JS weekday numbers: 0 = Sunday ... 6 = Saturday (Mon, Thu)
   },
   days: {},   // 'YYYY-MM-DD' -> { speak, listen, read, review } in seconds
   timer: null // { skill, startedAt (ms epoch) } while a timer runs
@@ -58,8 +60,24 @@ export function dayKey(d = new Date()) {
   return `${y}-${m}-${day}`;
 }
 
-export function targetMinutes() {
-  return Object.values(state.settings.plan).reduce((a, b) => a + b, 0);
+export const BASE_SKILLS = ['speak', 'listen', 'review'];
+
+const dateOf = (key) => { const [y, m, d] = key.split('-').map(Number); return new Date(y, m - 1, d); };
+
+export function isReadDay(key = dayKey()) {
+  return (state.settings.readDays || []).includes(dateOf(key).getDay());
+}
+
+/** Effective minutes per skill for a day. A skill at 0 is an extra without a goal. */
+export function planFor(key = dayKey()) {
+  const b = state.settings.plan;
+  const p = { speak: b.speak || 0, listen: b.listen || 0, read: 0, review: b.review || 0 };
+  if (isReadDay(key)) { p.read = p.speak; p.speak = 0; }
+  return p;
+}
+
+export function targetMinutes(key = dayKey()) {
+  return Object.values(planFor(key)).reduce((a, b) => a + b, 0);
 }
 
 /** Seconds logged for a day, including the running timer if it's today. */
@@ -74,7 +92,7 @@ export function totalSeconds(d) { return Object.values(d).reduce((a, b) => a + b
 
 /** A day "counts" for the streak when the total target time is reached. */
 export function dayMet(key) {
-  return totalSeconds(daySeconds(key)) >= targetMinutes() * 60;
+  return totalSeconds(daySeconds(key)) >= targetMinutes(key) * 60;
 }
 
 export function streak() {
@@ -127,7 +145,11 @@ export function addSeconds(key, skill, secs, persist = true) {
   if (persist) save();
 }
 
-export function setPlan(plan) { state.settings.plan = { ...state.settings.plan, ...plan }; save(); }
+export function setPlan(plan, readDays) {
+  state.settings.plan = { ...state.settings.plan, ...plan };
+  if (readDays) state.settings.readDays = readDays;
+  save();
+}
 
 export function exportData() { return JSON.stringify(state, null, 2); }
 
