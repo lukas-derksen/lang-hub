@@ -23,8 +23,10 @@ const DEFAULTS = {
     plan: { speak: 12, listen: 12, review: 6 },
     readDays: [1, 4], // JS weekday numbers: 0 = Sunday ... 6 = Saturday (Mon, Thu)
   },
-  days: {},   // 'YYYY-MM-DD' -> { speak, listen, read, review } in seconds
-  timer: null // { skill, startedAt (ms epoch) } while a timer runs
+  days: {},     // 'YYYY-MM-DD' -> { speak, listen, read, review } in seconds
+  timer: null,  // { skill, startedAt (ms epoch) } while a timer runs
+  mistakes: [], // { id, at, said, correct, explanation, category, source }
+  calls: [],    // { at, mode, title, seconds, mistakes }
 };
 
 let state = load();
@@ -44,6 +46,8 @@ function merge(base, data) {
     ...data,
     settings: { ...base.settings, ...(data.settings || {}), plan: { ...base.settings.plan, ...(data.settings?.plan || {}) } },
     days: data.days || {},
+    mistakes: Array.isArray(data.mistakes) ? data.mistakes : [],
+    calls: Array.isArray(data.calls) ? data.calls : [],
   };
 }
 
@@ -161,3 +165,44 @@ export function importData(json) {
 }
 
 export function resetAll() { state = structuredClone(DEFAULTS); save(); }
+
+// ---- coach: mistakes and calls ----
+export function addMistake(m, source) {
+  const item = {
+    id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+    at: Date.now(),
+    said: String(m.said || '').slice(0, 300),
+    correct: String(m.correct || '').slice(0, 300),
+    explanation: String(m.explanation || '').slice(0, 200),
+    category: String(m.category || 'other').slice(0, 40),
+    source,
+  };
+  if (!item.said || !item.correct) return null;
+  state.mistakes.unshift(item);
+  if (state.mistakes.length > 2000) state.mistakes.length = 2000;
+  save();
+  return item;
+}
+
+export function deleteMistake(id) { state.mistakes = state.mistakes.filter((m) => m.id !== id); save(); }
+
+export function logCall(call) {
+  state.calls.unshift({ at: Date.now(), ...call });
+  if (state.calls.length > 1000) state.calls.length = 1000;
+  save();
+}
+
+/** Coach call seconds in the current calendar month (on this device). */
+export function callSecondsThisMonth() {
+  const now = new Date();
+  return state.calls
+    .filter((c) => { const d = new Date(c.at); return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth(); })
+    .reduce((a, c) => a + (c.seconds || 0), 0);
+}
+
+// ---- secrets: kept apart from progress, never exported ----
+const SECRET_KEY = 'langhub.secret';
+export function getApiKey() { try { return localStorage.getItem(SECRET_KEY) || ''; } catch (e) { return ''; } }
+export function setApiKey(v) {
+  try { v ? localStorage.setItem(SECRET_KEY, v.trim()) : localStorage.removeItem(SECRET_KEY); } catch (e) { /* ignore */ }
+}

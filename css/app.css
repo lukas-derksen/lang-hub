@@ -201,3 +201,59 @@ input[type="number"], select {
 .day-chip span { display: inline-flex; align-items: center; justify-content: center; min-width: 48px; min-height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; font-weight: 600; font-size: .9rem; cursor: pointer; }
 .day-chip input:checked + span { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .day-chip input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* ---- coach ---- */
+.notice { border-color: var(--accent); background: var(--accent-soft); }
+.pill { display: inline-block; background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: .85rem; padding: 6px 12px; border-radius: 999px; margin-bottom: 12px; }
+.scene-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px; }
+@media (min-width: 560px) { .scene-grid { grid-template-columns: repeat(3, 1fr); } }
+.scene { margin: 0; text-align: left; font: inherit; color: var(--text); cursor: pointer; display: flex; flex-direction: column; gap: 2px; min-height: 140px; }
+.scene:disabled { opacity: .55; cursor: not-allowed; }
+.scene:not(:disabled):hover { border-color: var(--accent); }
+.scene-ico { font-size: 1.6rem; margin-bottom: 4px; }
+.extra-row { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; text-decoration: none; color: var(--text); border-style: dashed; }
+.extra-row .scene-ico { margin: 0; }
+.article-list { display: grid; gap: 10px; margin-bottom: 12px; }
+.article-row { margin: 0; display: flex; flex-direction: column; gap: 4px; text-decoration: none; color: var(--text); }
+.article-row:hover { border-color: var(--accent); }
+.back { display: inline-block; margin: 4px 0 10px; text-decoration: none; font-weight: 600; }
+.reader h1 { font-size: 1.5rem; margin-bottom: .6em; }
+.reader p[lang] { font-size: 1.08rem; line-height: 1.7; margin-bottom: 1em; }
+.glossary summary { cursor: pointer; }
+.glossary dl { margin: 12px 0 0; display: grid; gap: 8px; }
+.glossary dl div { display: grid; grid-template-columns: minmax(8em, 40%) 1fr; gap: 10px; }
+.glossary dt { font-weight: 600; }
+.glossary dd { margin: 0; color: var(--muted); }
+.stack { display: grid; gap: 6px; margin: 10px 0; }
+.stack input { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; min-height: 44px; width: 100%; }
+details.small summary { cursor: pointer; color: var(--accent); font-weight: 600; margin: 4px 0 8px; }
+details ol { padding-left: 1.2em; margin: 0 0 12px; }
+.meter { margin: 4px 0 8px; }
+.meter.warn > span { background: var(--red); }
+.mistakes { display: grid; gap: 10px; margin-bottom: 12px; }
+.mistake { margin: 0; }
+.mistake p { margin: 0 0 4px; }
+.mistake .said { color: var(--red); }
+.mistake .correct { font-weight: 700; font-size: 1.05rem; }
+.link-btn { background: none; border: 0; color: var(--muted); text-decoration: underline; font: inherit; cursor: pointer; padding: 0 0 0 8px; }
+
+/* call screen */
+.call { padding-top: 8px; }
+.orb-wrap { display: grid; place-items: center; height: 220px; }
+.orb { width: 150px; height: 150px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 55%, white), var(--accent)); transition: transform .3s ease; box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent); }
+.orb.idle { opacity: .45; animation: breathe 2.4s ease-in-out infinite; }
+.orb.listening { animation: ring 1.8s ease-out infinite; }
+.orb.speaking { animation: talk .5s ease-in-out infinite alternate; }
+@keyframes breathe { 50% { transform: scale(.94); } }
+@keyframes ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); } 100% { box-shadow: 0 0 0 28px transparent; } }
+@keyframes talk { from { transform: scale(1); } to { transform: scale(1.08); } }
+.call-status { font-weight: 700; font-size: 1.1rem; margin: 0; }
+.call-time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.call-actions { display: flex; justify-content: center; gap: 10px; margin: 12px 0; }
+.subs { max-height: 220px; overflow-y: auto; background: var(--surface-2); border-radius: 12px; padding: 10px 12px; margin: 8px 0; }
+.subs p { margin: 0 0 6px; }
+.subs .you { color: var(--muted); }
+.flashcard { text-align: center; }
+.flashcard-text { font-size: 1.3rem; font-weight: 700; line-height: 1.35; margin: 8px 0 14px; }
+body.in-call .tabbar { display: none; }
+@media (prefers-reduced-motion: reduce) { .orb { animation: none !important; } }

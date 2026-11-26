@@ -1,6 +1,7 @@
 import * as store from './store.js';
 import { SKILLS } from './store.js';
 import { lang } from './languages.js';
+import * as coachViews from './coachviews.js';
 
 const L = () => lang(store.get().settings.language);
 
@@ -143,34 +144,12 @@ function sectionPage(skill, intro, comingSoon, interim) {
   </div>`;
 }
 
-const viewSpeak = () => sectionPage('speak',
-  'Speak out loud every day, so grammar and vocabulary come out without thinking.',
-  [`Live conversations and role plays with a ${L().name} voice partner (bar, doctor, neighbours, phone calls).`,
-    'A recap after each conversation, with your mistakes saved to your personal log.',
-    'Conversation cards (extra): 10 to 20 cards with a question or topic. Some need a sentence or two, others invite you to go in depth, and the coach follows up like your tutor does. For days when you have time and credits to spare.'],
-  `<p>Run the timer while you practise speaking: shadow a podcast out loud, describe your day, or prepare for your lesson with your tutor.</p>
-   <p class="muted">Tip: record yourself for a minute and listen back. It's uncomfortable, and it works.</p>`);
-
 const viewListen = () => sectionPage('listen',
   `Understand real ${L().name} at natural speed, even when you're not fully concentrating.`,
   ['Clips with different voices, accents and speeds, from slow to fast native speech.',
     'Dictation and comprehension questions, with the transcript revealed only after you answer.',
     '"Distracted mode" with café and street noise in the background.'],
   `<p>Run the timer while you watch or listen to ${L().name} content. Choose something slightly too fast for you, and avoid English subtitles.</p>`);
-
-const viewRead = () => sectionPage('read',
-  'Read something with real depth, then talk it through, to check you understood the meaning and not just the words.',
-  ['On your reading days (Monday and Thursday by default) this replaces the speaking block.',
-    'An article with some depth (culture, society, science, opinion), pitched just above your level.',
-    'Straight after reading, a live conversation with a coach who asks what it was about, what the author meant, and what you think, and pushes you to use the article\'s vocabulary.',
-    'New words and phrases from the article added to your review drills.'],
-  `<p>Run the timer while you read a longer article in ${L().name}, for example from a newspaper or magazine you like. Afterwards, summarise it out loud in two minutes without looking.</p>`);
-
-const viewReview = () => sectionPage('review',
-  'Turn the mistakes you actually make into short drills, so the right form becomes automatic.',
-  ['Spaced repetition drills built from your own mistake log, where you produce whole sentences.',
-    'A weekly summary to bring to your tutor.'],
-  `<p>Run the timer while you review notes from your last lesson with your tutor, or rewrite a few sentences you got wrong.</p>`);
 
 function viewProgress() {
   const s = store.get();
@@ -212,6 +191,7 @@ function viewProgress() {
     <div class="heatmap">${cells.join('')}</div>
     <p class="legend muted"><span class="hm l0"></span> none <span class="hm l2"></span> some <span class="hm l4"></span> full goal</p>
   </div>
+  ${coachViews.usageCard()}
   <div class="card">
     <h3>Time per skill</h3>
     ${Object.keys(SKILLS).map((k) => `
@@ -248,6 +228,7 @@ function viewSettings() {
     </div>
     <button class="btn btn-primary" type="submit">Save</button>
   </form>
+  ${coachViews.settingsCard()}
   <div class="card">
     <h3>Backup</h3>
     <p class="muted">Your progress is stored only on this device. Export it now and then, or to move to another device.</p>
@@ -269,24 +250,33 @@ function viewSettings() {
     <h3>Reset</h3>
     <button class="btn btn-danger" data-action="reset">Delete all progress</button>
   </div>
-  <p class="muted center small">Lang Hub · step 1 of 4</p>`;
+  <p class="muted center small">Lang Hub · step 2 of 4</p>`;
 }
 
 // ---------- router ----------
-const routes = { today: viewToday, speak: viewSpeak, listen: viewListen, read: viewRead, review: viewReview, progress: viewProgress, settings: viewSettings };
+const routes = {
+  today: viewToday, listen: viewListen, progress: viewProgress, settings: viewSettings,
+  speak: coachViews.viewSpeak, read: coachViews.viewRead, review: coachViews.viewReview,
+  cards: coachViews.viewCards, call: coachViews.viewCall, recap: coachViews.viewRecap,
+};
+const TAB_OF = { cards: 'speak', call: null, recap: null };
 
 function currentRoute() {
-  const r = (location.hash.replace(/^#\/?/, '') || 'today').split('?')[0];
-  return routes[r] ? r : 'today';
+  const [r, ...params] = (location.hash.replace(/^#\/?/, '') || 'today').split('?')[0].split('/');
+  return routes[r] ? { r, params } : { r: 'today', params: [] };
 }
 
 function render() {
-  const r = currentRoute();
+  const { r, params } = currentRoute();
   document.getElementById('lang-name').textContent = L().native;
-  view.innerHTML = routes[r]();
-  document.querySelectorAll('[data-tab]').forEach((a) => a.classList.toggle('active', a.dataset.tab === r));
+  view.innerHTML = routes[r](...params);
+  const tab = r in TAB_OF ? TAB_OF[r] : r;
+  document.querySelectorAll('[data-tab]').forEach((a) => a.classList.toggle('active', a.dataset.tab === tab));
+  document.body.classList.toggle('in-call', r === 'call');
   bindView(r);
+  coachViews.bind(r, params);
 }
+coachViews.init({ render, toast, blockCard, sectionPage, L, esc, mmss });
 
 window.addEventListener('hashchange', () => { render(); view.focus({ preventScroll: true }); window.scrollTo(0, 0); });
 
@@ -311,6 +301,7 @@ view.addEventListener('click', (e) => {
 });
 
 function bindView(r) {
+  if (r === 'progress') coachViews.fillUsage();
   if (r !== 'settings') return;
   const form = $('#plan-form');
   form.addEventListener('input', () => {

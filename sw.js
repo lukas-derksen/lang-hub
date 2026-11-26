@@ -1,6 +1,6 @@
 // Offline support: the app shell is cached on install and served cache-first.
 // Bump VERSION whenever a shell file changes so phones pick up the new version.
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE = `langhub-${VERSION}`;
 const SHELL = [
   './',
@@ -9,6 +9,11 @@ const SHELL = [
   './js/app.js',
   './js/store.js',
   './js/languages.js',
+  './js/coach.js',
+  './js/coachviews.js',
+  './content/it/scenes.json',
+  './content/it/cards.json',
+  './content/it/articles.json',
   './manifest.webmanifest',
   './icons/icon.svg',
   './icons/icon-192.png',
