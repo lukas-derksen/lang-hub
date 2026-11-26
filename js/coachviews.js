@@ -327,7 +327,7 @@ export function settingsCard() {
     <details class="small"><summary>How to make a safe key</summary>
       <ol>
         <li>In ElevenLabs, go to <em>Developers → API keys → Create key</em>.</li>
-        <li>Turn on <strong>restrict key</strong> and allow only <strong>ElevenAgents</strong> (to start calls) and <strong>User: read</strong> (for the credit meter).</li>
+        <li>Turn on <strong>restrict key</strong> and allow only <strong>ElevenAgents</strong> (to start calls), <strong>Text to Speech</strong> (to voice listening clips) and <strong>User: read</strong> (for the credit meter).</li>
         <li>Set a monthly <strong>credit limit</strong> on the key, for example 60,000, so a leaked key can't spend more than that.</li>
       </ol>
     </details>

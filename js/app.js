@@ -2,6 +2,7 @@ import * as store from './store.js';
 import { SKILLS } from './store.js';
 import { lang } from './languages.js';
 import * as coachViews from './coachviews.js';
+import * as listen from './listen.js';
 
 const L = () => lang(store.get().settings.language);
 
@@ -144,13 +145,6 @@ function sectionPage(skill, intro, comingSoon, interim) {
   </div>`;
 }
 
-const viewListen = () => sectionPage('listen',
-  `Understand real ${L().name} at natural speed, even when you're not fully concentrating.`,
-  ['Clips with different voices, accents and speeds, from slow to fast native speech.',
-    'Dictation and comprehension questions, with the transcript revealed only after you answer.',
-    '"Distracted mode" with café and street noise in the background.'],
-  `<p>Run the timer while you watch or listen to ${L().name} content. Choose something slightly too fast for you, and avoid English subtitles.</p>`);
-
 function viewProgress() {
   const s = store.get();
   const keys = Object.keys(s.days);
@@ -250,12 +244,12 @@ function viewSettings() {
     <h3>Reset</h3>
     <button class="btn btn-danger" data-action="reset">Delete all progress</button>
   </div>
-  <p class="muted center small">Lang Hub · step 2 of 4</p>`;
+  <p class="muted center small">Lang Hub · step 3 of 4</p>`;
 }
 
 // ---------- router ----------
 const routes = {
-  today: viewToday, listen: viewListen, progress: viewProgress, settings: viewSettings,
+  today: viewToday, listen: listen.viewListen, progress: viewProgress, settings: viewSettings,
   speak: coachViews.viewSpeak, read: coachViews.viewRead, review: coachViews.viewReview,
   cards: coachViews.viewCards, call: coachViews.viewCall, recap: coachViews.viewRecap,
 };
@@ -275,8 +269,10 @@ function render() {
   document.body.classList.toggle('in-call', r === 'call');
   bindView(r);
   coachViews.bind(r, params);
+  listen.bind(r, params);
 }
 coachViews.init({ render, toast, blockCard, sectionPage, L, esc, mmss });
+listen.init({ render, toast, blockCard, L, esc, mmss });
 
 window.addEventListener('hashchange', () => { render(); view.focus({ preventScroll: true }); window.scrollTo(0, 0); });
 

@@ -27,6 +27,7 @@ const DEFAULTS = {
   timer: null,  // { skill, startedAt (ms epoch) } while a timer runs
   mistakes: [], // { id, at, said, correct, explanation, category, source }
   calls: [],    // { at, mode, title, seconds, mistakes }
+  listening: {}, // clipId -> { best, dict, tries, last }
 };
 
 let state = load();
@@ -48,10 +49,11 @@ function merge(base, data) {
     days: data.days || {},
     mistakes: Array.isArray(data.mistakes) ? data.mistakes : [],
     calls: Array.isArray(data.calls) ? data.calls : [],
+    listening: data.listening && typeof data.listening === 'object' ? data.listening : {},
   };
 }
 
-function save() {
+export function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
   listeners.forEach((fn) => fn(state));
 }
