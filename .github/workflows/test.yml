@@ -18,3 +18,7 @@ jobs:
       - name: Unit tests
         # Node 22 treats arguments as file globs, so a bare `tests/` directory isn't expanded.
         run: node --test tests/*.test.mjs
+      - name: Install browser for smoke test
+        run: npm install --no-save --no-package-lock playwright@1.49.1 && npx playwright install --with-deps chromium
+      - name: Browser smoke test
+        run: node tests/smoke.cjs

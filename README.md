@@ -76,3 +76,9 @@ object-src 'none'; base-uri 'self'; form-action 'self'
 - `connect-src` allows only ElevenLabs: REST calls (`https://api.elevenlabs.io`) and the call's WebSocket (`wss://api.elevenlabs.io`). Calls use `connectionType: 'websocket'`; the SDK's WebRTC mode would also need `wss://livekit.rtc.elevenlabs.io`.
 - The voice SDK loads its audio worklets from `blob:` URLs, which `script-src blob:` allows. When the device can't record at 16 kHz it also loads a resampler worklet (WebAssembly) from jsDelivr, so that exact URL and `'wasm-unsafe-eval'` are allowed too. To drop them, vendor the worklets and pass `workletPaths` / `libsampleratePath` to `startSession` in `js/coach.js`.
 - A `<meta>` CSP can't set `frame-ancestors` (GitHub Pages doesn't allow custom headers).
+
+## Tests
+
+- `node --test tests/*.test.mjs`: unit tests for storage and review scheduling (no dependencies).
+- `node tests/smoke.cjs`: opens every screen in Chromium with the ElevenLabs SDK mocked, runs a call, checks offline start and the Content Security Policy. Needs the `playwright` package.
+- Both run on every pull request (`.github/workflows/test.yml`). Real ElevenLabs behaviour can't be tested there: use the manual checklist in `TESTING.md`.
