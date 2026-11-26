@@ -1,0 +1,16 @@
+{
+  "note": "Real Italian on YouTube, played in an embedded player (nothing is copied or rehosted). Video ids were found by web search and couldn't be checked from the build sandbox; the app says so when one can't be embedded.",
+  "channels": [
+    { "name": "Easy Italian", "url": "https://www.youtube.com/channel/UChpDG_WQkf_2tgLUr9xTR0g", "why": "Street interviews with ordinary Italians, Italian subtitles on screen." },
+    { "name": "Podcast Italiano", "url": "https://www.youtube.com/@PodcastItaliano", "why": "Natural speech at B1–B2, mostly with Italian captions." },
+    { "name": "RaiNews", "url": "https://www.youtube.com/channel/UCxqR9g_1XlnfrqwHK9viwCw/videos", "why": "Short news reports at full native speed." }
+  ],
+  "videos": [
+    { "id": "6yGinUaciQA", "title": "What did you miss during lockdown?", "channel": "Easy Italian", "level": "B1", "topics": ["society", "everyday"], "kind": "Street interviews" },
+    { "id": "PHFz1vjzHKY", "title": "Italian family habits: myth or reality?", "channel": "Easy Italian", "level": "B1", "topics": ["personal", "culture"], "kind": "Street interviews" },
+    { "id": "TSmHXFvY9f4", "title": "7 words Italians hate", "channel": "Easy Italian", "level": "B1", "topics": ["culture", "everyday"], "kind": "Street interviews" },
+    { "id": "Aj8sGzb4hks", "title": "3 ragioni per cui imparare l'italiano in modo naturale è più efficace", "channel": "Podcast Italiano", "level": "B1–B2", "topics": ["culture"], "kind": "Monologue" },
+    { "id": "K2Xq3LgqsAM", "title": "Podcast Italiano livello intermedio (B1–B2)", "channel": "Podcast Italiano", "level": "B1–B2", "topics": ["culture"], "kind": "Podcast" },
+    { "id": "TAzeQjtJ6G8", "title": "La Scuola Statale Italiana di Madrid", "channel": "RaiNews24", "level": "B2", "topics": ["society", "work"], "kind": "News report" }
+  ]
+}

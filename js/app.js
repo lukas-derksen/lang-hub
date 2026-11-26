@@ -3,6 +3,8 @@ import { SKILLS } from './store.js';
 import { lang } from './languages.js';
 import * as coachViews from './coachviews.js';
 import * as listen from './listen.js';
+import * as shadow from './shadow.js';
+import * as videos from './videos.js';
 import * as review from './review.js';
 import * as picks from './picks.js';
 import * as server from './server.js';
@@ -373,8 +375,9 @@ const routes = {
   speak: coachViews.viewSpeak, read: coachViews.viewRead, review: coachViews.viewReview,
   cards: coachViews.viewCards, call: coachViews.viewCall, recap: coachViews.viewRecap,
   drill: review.viewDrill, report: review.viewReport,
+  shadow: shadow.viewShadow, video: videos.viewVideo,
 };
-const TAB_OF = { cards: 'speak', call: null, recap: null, drill: 'review', report: 'progress' };
+const TAB_OF = { shadow: 'listen', video: 'listen', cards: 'speak', call: null, recap: null, drill: 'review', report: 'progress' };
 
 function currentRoute() {
   const [r, ...params] = (location.hash.replace(/^#\/?/, '') || 'today').split('?')[0].split('/');
@@ -393,10 +396,14 @@ function render() {
   coachViews.bind(r, params);
   serverViews.bind(r, params);
   listen.bind(r, params);
+  shadow.bind(r, params);
+  videos.bind(r, params);
   review.bind(r, params);
 }
 coachViews.init({ render, toast, blockCard, sectionPage, L, esc, mmss });
-listen.init({ render, toast, blockCard, L, esc, mmss });
+listen.init({ render, toast, blockCard, L, esc, mmss, videosSection: () => videos.videosSection() });
+shadow.init({ render, toast, esc });
+videos.init({ render, toast, L, esc });
 review.init({ render, toast, L, esc });
 picks.init({ render, toast, L, esc });
 serverViews.init({ render, toast, esc });
@@ -406,7 +413,7 @@ let contentStale = false;
 function applyNewContent() {
   if (!contentStale) return;
   const { r, params } = currentRoute();
-  if (r === 'call' || (r === 'listen' && params[0])) return; // wait for the next screen change
+  if (r === 'call' || r === 'shadow' || (r === 'listen' && params[0])) return; // wait for the next screen change
   const done = [listen.reset(), coachViews.reset()].every(Boolean);
   picks.reset();
   contentStale = !done;

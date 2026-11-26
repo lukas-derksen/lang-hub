@@ -56,6 +56,25 @@ Progress is stored in the browser's `localStorage` on each device. Use **Setting
 - If the browser cleared a clip's audio (for example to free space), the app asks before voicing it again and says roughly how many credits it costs. The list of clips voiced on this device is in `localStorage` (`langhub.voiced`), not in the backup.
 - Speed changes are done in the browser (pitch preserved), so they cost nothing. Distracted mode noise (café, street, TV) is synthesised in the browser; the "chatter" is the clip itself played backwards, so it sounds like speech but can't be understood.
 
+## Shadowing
+
+Every listening clip has a **Shadow it** button (`#/shadow/<clip>`, `js/shadow.js`). You go through the clip sentence by sentence: *Repeat after* plays the sentence and then records you, *Along with* records you while it plays (use headphones). Speed 0.75×, 0.9× or 1×, text hidden until you ask for it.
+
+- Feedback runs on the device, free (`js/shadowkit.js`, pure functions with tests): both recordings are trimmed to the speech and stretched to the same length, then compared on **rhythm** (loudness shape: beats, stress, pauses), **melody** (pitch contour in semitones around each voice's own median, so a deeper voice doesn't matter) and **pace**, plus pauses the speaker didn't make. It shows both melody lines and one or two tips. It's a rough guide, not a pronunciation grade.
+- **Check words** sends your attempt to ElevenLabs speech to text (`STT_MODEL` in `js/shadow.js`, `scribe_v1`) with your key, which needs the *Speech to Text* permission, and marks the words it didn't recognise. Only when you tap it.
+- Sentences are cut from each speaker's turn at sentence punctuation, with the cut moved to the nearest pause in the audio.
+- Shadowing counts as speaking time, and attempts are kept in your progress (`shadowing`, best score per sentence).
+
+## Real Italian (YouTube)
+
+The Listening page lists real Italian videos (`content/it/videos.json`: street interviews, a podcast, RAI news) and lets you add any YouTube link, including RAI's YouTube channels. RaiPlay itself can't be embedded.
+
+- Videos play in YouTube's own embedded player (`youtube-nocookie.com`). Nothing is downloaded or rehosted, and it needs a connection.
+- `js/yt.js` drives the player through YouTube's postMessage protocol, without loading YouTube's script, so the CSP only adds `frame-src https://www.youtube-nocookie.com` (and `img-src https://i.ytimg.com` for thumbnails).
+- Speed 0.75×, 1× or 1.25×, Italian captions on or off (YouTube's captions, where the channel has them), and distracted mode noise on top.
+- **✂ Mark phrase** saves the bit since your previous mark (at most 8 seconds back) as a phrase to practise; nudge either end by half a second. Phrases can be played, looped and shadowed. Because the browser can't read the sound inside a YouTube player, shadowing a video gives you your recording next to the original, your speaking time against the phrase, *What did I sound like?* (speech to text, your key) and a self-rating, but no rhythm or melody scores.
+- The video ids in `videos.json` were found by web search and couldn't be opened from the build sandbox. A video that can't be embedded shows the reason and a link to YouTube.
+
 ## Personal picks
 
 - Today shows one pick for the speaking (or reading) block and one for listening, each with a one-line reason and a *Something else* button. Picks are chosen once a day and kept.
@@ -86,10 +105,11 @@ Develop: `cd server && npm ci && npm test && npx tsc --noEmit`. Locally: put `AP
 default-src 'self';
 script-src 'self' blob: 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/@alexanderolsen/libsamplerate-js@2.1.2/dist/libsamplerate.worklet.js;
 style-src 'self' 'unsafe-inline';
-img-src 'self' data: blob:;
+img-src 'self' data: blob: https://i.ytimg.com;
 media-src 'self' blob:;
 connect-src 'self' https://api.elevenlabs.io wss://api.elevenlabs.io;
 worker-src 'self' blob:;
+frame-src https://www.youtube-nocookie.com;
 object-src 'none'; base-uri 'self'; form-action 'self'
 ```
 
