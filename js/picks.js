@@ -25,7 +25,7 @@ function loadCatalog() {
       cat = [
         ...[...server.byKind('scene'), ...scenes].map((x) => item('scene', 'speak', x, { icon: x.icon, sub: x.subtitle })),
         ...[...server.byKind('article'), ...articles].map((x) => item('article', 'read', x, { minutes: x.minutes })),
-        ...[...server.byKind('clip'), ...clips.clips].map((x) => item('clip', 'listen', x, { questions: x.questions.length, sub: x.genre })),
+        ...[...server.byKind('clip').filter((c) => c.segments.every((sg) => clips.voices?.[sg.voice])), ...clips.clips].map((x) => item('clip', 'listen', x, { questions: x.questions.length, sub: x.genre })),
       ];
       catError = false;
     })
@@ -129,7 +129,7 @@ function pickCard(slot, p) {
   const meta = SLOT[slot];
   return `<article class="card pick ${done ? 'done' : ''}" data-slot="${slot}">
     <p class="muted small">${meta.icon} ${meta.label} · ${esc(it.level)}${it.sub ? ` · ${esc(it.sub)}` : ''}</p>
-    <strong lang="it">${it.icon ? `${it.icon} ` : ''}${esc(it.title)}</strong>
+    <strong lang="it">${it.icon ? `${esc(it.icon)} ` : ''}${esc(it.title)}</strong>
     <p class="small pick-reason">${done ? 'Done today ✓' : esc(reason)}</p>
     <div class="row">
       ${done ? '' : go}
@@ -156,7 +156,7 @@ export function ratingCard(item) {
   if (!item?.key) return '';
   const cur = store.recentRating(item.key);
   const chip = (action, value, label) => `<button type="button" class="chip ${cur[action === 'rate' ? 'rate' : 'level'] === value ? 'on' : ''}" data-action="${action}" data-value="${value}">${label}</button>`;
-  return `<div class="card rate-card" data-item="${esc(item.key)}" data-topics="${esc((item.topics || []).join(','))}" data-d="${item.d}" data-skill="${esc(item.skill || '')}">
+  return `<div class="card rate-card" data-item="${esc(item.key)}" data-topics="${esc((item.topics || []).join(','))}" data-d="${Number(item.d) || 0}" data-skill="${esc(item.skill || '')}">
     <h3>How was it?</h3>
     <div class="row chips" role="group" aria-label="Did you like it">
       ${chip('rate', 'up', '👍 Liked it')}${chip('rate', 'meh', '😐 OK')}${chip('rate', 'down', '👎 Not for me')}
@@ -184,7 +184,8 @@ function rate(btn) {
 export function learnedCard() {
   const events = store.get().events;
   const prof = rec.interestProfile(events);
-  const topics = Object.entries(prof).filter(([, x]) => x.n >= 0.3).sort((a, b) => b[1].mean - a[1].mean);
+  // Only topics the app knows (generated content could carry others).
+  const topics = Object.entries(prof).filter(([t, x]) => Object.hasOwn(rec.TOPICS, t) && x.n >= 0.3).sort((a, b) => b[1].mean - a[1].mean);
   const lv = rec.levels(events);
   return `<div class="card">
     <h3>What the app has learned</h3>

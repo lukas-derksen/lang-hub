@@ -71,10 +71,12 @@ Progress is stored in the browser's `localStorage` on each device. Use **Setting
 - **Writes new content** with Claude (`MODEL` in `server/wrangler.toml`, default `claude-opus-5-5`): articles, listening clips, speaking scenes and batches of conversation cards, in the same JSON shapes as `content/it/`. The topic follows your interest profile (the same model as Today's picks, imported from `js/recommend.js`), with some exploration and the practical topics; the level is just above your estimate for that skill; your frequent mistake categories are woven in.
 - **Tops up daily** (cron, 04:30 UTC) when you have fewer than 3 unplayed clips, 2 unread articles or 2 new scenes, within a weekly budget: 3 clips, 2 articles, 1 scene and 1 batch of 20 cards (`*_PER_WEEK` vars). Settings → *Check for new content now* runs it on demand.
 - **Voices clips once** with ElevenLabs (same model and settings as the app) and keeps the audio in KV, so every device gets it without spending credits again. Capped at `TTS_MONTHLY_CHARS` (25,000) per month.
-- **Stores** your synced events, done items and mistake categories (D1), so it knows what to write. Nothing else from your progress leaves the device.
+- **Stores** your synced events, done items and mistake categories (D1), so it knows what to write. Nothing else from your progress leaves the device. The app uploads them at most every 10 minutes, when you leave the app, and right after a call or a drill.
+- **Downloaded items** are kept in the browser's IndexedDB (`langhub` → `kv` → `serveritems`), not in `localStorage`, and work offline. Generated items show *New for you*; a bad one can be removed with *Hide this* (article page, clip page, call recap), which hides it on the server too.
+- Settings → *Content server* shows the last nightly run and Claude usage this month against the server's limits.
 - Every route except `/api/health` needs the app password (`LANGHUB_APP_TOKEN`) as a bearer token; CORS allows only `ALLOWED_ORIGINS`.
 
-Deploy: add the repository secrets `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` (template "Edit Cloudflare Workers" plus D1 Edit), `ANTHROPIC_API_KEY`, `ELEVENLABS_TTS_KEY` (Text to Speech only) and `LANGHUB_APP_TOKEN` (32+ random characters), then run *Actions → Deploy content server*. The first run creates the database and KV namespace. The run's summary shows the server address; enter it with the app password in Settings → *Content server*.
+Deploy: add the repository secrets `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` (template "Edit Cloudflare Workers" plus D1 Edit), `ANTHROPIC_API_KEY`, `ELEVENLABS_TTS_KEY` (Text to Speech only) and `LANGHUB_APP_TOKEN` (32+ random characters), then run *Actions → Deploy content server*. The first run creates the database and KV namespace. The run's summary shows the server address; enter it with the app password in Settings → *Content server*. The app only accepts the address in `ALLOWED_ORIGIN` (`js/server.js`).
 
 Develop: `cd server && npm ci && npm test && npx tsc --noEmit`. Locally: put `APP_TOKEN`, `ANTHROPIC_API_KEY` and `ELEVENLABS_TTS_KEY` in `server/.dev.vars`, then `npx wrangler d1 migrations apply lang-hub --local` and `npx wrangler dev`.
 
@@ -88,14 +90,16 @@ script-src 'self' blob: 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/@alexand
 style-src 'self' 'unsafe-inline';
 img-src 'self' data: blob:;
 media-src 'self' blob:;
-connect-src 'self' https://api.elevenlabs.io wss://api.elevenlabs.io;
+connect-src 'self' https://api.elevenlabs.io wss://api.elevenlabs.io https://lang-hub-api.dark-bird-a775.workers.dev;
 worker-src 'self' blob:;
 object-src 'none'; base-uri 'self'; form-action 'self'
 ```
 
 - No inline scripts or event handlers: all code is in `js/` and `vendor/`. Keep it that way.
 - `style-src 'unsafe-inline'` is only there for `style="width:…"` attributes in the templates (progress bars).
-- `connect-src` allows only ElevenLabs: REST calls (`https://api.elevenlabs.io`) and the call's WebSocket (`wss://api.elevenlabs.io`). Calls use `connectionType: 'websocket'`; the SDK's WebRTC mode would also need `wss://livekit.rtc.elevenlabs.io`.
+- `connect-src` allows only ElevenLabs (REST calls on `https://api.elevenlabs.io` and the call's WebSocket on `wss://api.elevenlabs.io`) and your own content server, `https://lang-hub-api.dark-bird-a775.workers.dev`, by its exact address (not `*.workers.dev`, which anyone can deploy to). Calls use `connectionType: 'websocket'`; the SDK's WebRTC mode would also need `wss://livekit.rtc.elevenlabs.io`.
+- The content server's address is `ALLOWED_ORIGIN` in `js/server.js`; Settings refuses any other address. If the server moves, change it there and in `index.html`'s `connect-src` together.
+- Everything from the content server (titles, icons, ids, numbers) is escaped or coerced before it goes into the page, and generated items with a broken shape are skipped.
 - The voice SDK loads its audio worklets from `blob:` URLs, which `script-src blob:` allows. When the device can't record at 16 kHz it also loads a resampler worklet (WebAssembly) from jsDelivr, so that exact URL and `'wasm-unsafe-eval'` are allowed too. To drop them, vendor the worklets and pass `workletPaths` / `libsampleratePath` to `startSession` in `js/coach.js`.
 - A `<meta>` CSP can't set `frame-ancestors` (GitHub Pages doesn't allow custom headers).
 

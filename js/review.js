@@ -2,6 +2,7 @@
 // and a shareable progress report for the tutor.
 import * as store from './store.js';
 import { SKILLS } from './store.js';
+import { syncSoon } from './server.js';
 
 let H = {};
 export function init(helpers) { H = helpers; }
@@ -84,6 +85,7 @@ function finishView() {
   session = null;
   if (store.get().timer?.skill === 'review') store.stopTimer();
   store.logDrill({ cards: s.done, right: s.right, seconds: Math.round((Date.now() - s.started) / 1000) });
+  syncSoon();
   return `<section class="page-head"><p class="eyebrow">Review</p><h1>Fatto! 🎉</h1>
     <p class="muted">${s.done} card${s.done === 1 ? '' : 's'}, ${s.right} remembered well. Cards you found hard come back sooner.</p></section>
     <div class="row"><a class="btn btn-primary" href="#/today">Back to today</a><a class="btn btn-ghost" href="#/review">Review</a></div>`;
@@ -264,7 +266,7 @@ document.addEventListener('click', async (e) => {
     session.idx++; session.shown = false; session.typed = '';
     H.render(); window.scrollTo(0, 0);
   } else if (a === 'drill-quit') {
-    if (session) { const s = session; session = null; if (store.get().timer?.skill === 'review') store.stopTimer(); if (s.done) store.logDrill({ cards: s.done, right: s.right, seconds: Math.round((Date.now() - s.started) / 1000) }); }
+    if (session) { const s = session; session = null; if (store.get().timer?.skill === 'review') store.stopTimer(); if (s.done) { store.logDrill({ cards: s.done, right: s.right, seconds: Math.round((Date.now() - s.started) / 1000) }); syncSoon(); } }
   } else if (a === 'report-days') {
     reportDays = Number(btn.dataset.days); H.render();
   } else if (a === 'report-share') {
