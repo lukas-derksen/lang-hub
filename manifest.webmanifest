@@ -1,7 +1,7 @@
 {
-  "name": "Lang Hub — Italiano",
+  "name": "Lang Hub",
   "short_name": "Lang Hub",
-  "description": "Daily Italian practice: speaking, listening and grammar through use.",
+  "description": "Daily language practice: speaking, listening, reading and grammar through use.",
   "id": "./",
   "start_url": "./#/today",
   "scope": "./",

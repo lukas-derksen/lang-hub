@@ -66,6 +66,8 @@ a { color: var(--accent); }
 .brand small { color: var(--muted); font-weight: 500; }
 .icon-btn { color: var(--muted); display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; }
 .icon-btn:hover { background: var(--surface-2); }
+.icon-btn.active { color: var(--accent); background: var(--accent-soft); }
+.top-actions { display: flex; gap: 4px; }
 
 main { max-width: 640px; margin: 0 auto; padding: 8px 16px 0; outline: none; }
 

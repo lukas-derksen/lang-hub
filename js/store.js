@@ -1,21 +1,27 @@
+import { DEFAULT_LANGUAGE } from './languages.js';
+
 // Local persistence. Everything lives on this device (localStorage), with
 // export/import in Settings as the backup path.
 
 const KEY = 'langhub.v1';
 
 export const SKILLS = {
-  speak: { label: 'Speaking', it: 'Parlare', icon: '🗣', route: '#/speak' },
-  listen: { label: 'Listening', it: 'Ascoltare', icon: '🎧', route: '#/listen' },
-  review: { label: 'Review', it: 'Ripasso', icon: '✎', route: '#/review' },
+  speak: { label: 'Speaking', icon: '🗣', route: '#/speak' },
+  listen: { label: 'Listening', icon: '🎧', route: '#/listen' },
+  read: { label: 'Reading', icon: '📖', route: '#/read' },
+  review: { label: 'Review', icon: '✎', route: '#/review' },
 };
+
+const ZERO = () => Object.fromEntries(Object.keys(SKILLS).map((k) => [k, 0]));
 
 const DEFAULTS = {
   version: 1,
   settings: {
-    language: 'it',
-    plan: { speak: 12, listen: 12, review: 6 }, // minutes per day
+    language: DEFAULT_LANGUAGE,
+    // Minutes per day. A skill set to 0 is shown as a bonus without a goal.
+    plan: { speak: 12, listen: 12, read: 0, review: 6 },
   },
-  days: {},   // 'YYYY-MM-DD' -> { speak: seconds, listen: seconds, review: seconds }
+  days: {},   // 'YYYY-MM-DD' -> { speak, listen, read, review } in seconds
   timer: null // { skill, startedAt (ms epoch) } while a timer runs
 };
 
@@ -58,7 +64,7 @@ export function targetMinutes() {
 
 /** Seconds logged for a day, including the running timer if it's today. */
 export function daySeconds(key = dayKey()) {
-  const d = { speak: 0, listen: 0, review: 0, ...(state.days[key] || {}) };
+  const d = { ...ZERO(), ...(state.days[key] || {}) };
   const t = state.timer;
   if (t && key === dayKey()) d[t.skill] += Math.max(0, Math.floor((Date.now() - t.startedAt) / 1000));
   return d;
@@ -116,7 +122,7 @@ export function stopTimer(persist = true) {
 }
 
 export function addSeconds(key, skill, secs, persist = true) {
-  const d = state.days[key] || (state.days[key] = { speak: 0, listen: 0, review: 0 });
+  const d = state.days[key] || (state.days[key] = ZERO());
   d[skill] = Math.max(0, (d[skill] || 0) + secs);
   if (persist) save();
 }

@@ -1,12 +1,12 @@
 # Lang Hub
 
-A personal PWA for daily Italian practice, built around a 30 minute routine of speaking, listening and review. It installs on a phone or laptop and works offline.
+A personal PWA for daily language practice, built around a 30 minute routine of speaking, listening and review, with reading as an extra. It starts with Italian, and other languages can be added in `js/languages.js`. It installs on a phone or laptop and works offline.
 
 ## Roadmap
 
 1. **App shell and daily routine** (this version): "Today" screen with timers per skill, streak, weekly view, progress page, settings, backup.
 2. **Speaking partner**: live conversations with an ElevenLabs voice agent, with a mistake log and recap.
-3. **Listening trainer**: clips in different voices, accents and speeds, dictation and a "distracted mode" with background noise.
+3. **Listening and reading**: the listening trainer: clips in different voices, accents and speeds, dictation and a "distracted mode" with background noise. The reading section has an article with some depth, followed by a live conversation with a coach about it.
 4. **Grammar through use**: spaced repetition drills built from the mistake log, plus a weekly summary for the tutor.
 
 ## Running locally

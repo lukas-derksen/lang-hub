@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Lang Hub</title>
-  <meta name="description" content="Daily Italian practice: speaking, listening and grammar through use.">
+  <meta name="description" content="Daily language practice: speaking, listening, reading and grammar through use.">
   <meta name="theme-color" content="#1f6f50">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -18,21 +18,26 @@
   <header class="topbar">
     <a class="brand" href="#/today" aria-label="Lang Hub home">
       <img src="icons/icon.svg" alt="" width="28" height="28">
-      <span>Lang Hub <small>· italiano</small></span>
+      <span>Lang Hub <small>· <span id="lang-name">italiano</span></small></span>
     </a>
-    <a class="icon-btn" href="#/settings" aria-label="Settings" title="Settings">
+    <div class="top-actions">
+    <a class="icon-btn" href="#/progress" data-tab="progress" aria-label="Progress" title="Progress">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M4 20h16v-2H4v2Zm1-4h3V9H5v7Zm5.5 0h3V4h-3v12Zm5.5 0h3v-5h-3v5Z"/></svg>
+    </a>
+    <a class="icon-btn" href="#/settings" data-tab="settings" aria-label="Settings" title="Settings">
       <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-1.7-1l-.4-2.5h-4l-.4 2.5c-.6.3-1.2.6-1.7 1l-2.4-1-2 3.4 2 1.6a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.4 2.5h4l.4-2.5c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg>
     </a>
+    </div>
   </header>
 
   <main id="view" tabindex="-1"></main>
 
   <nav class="tabbar" aria-label="Sections">
-    <a href="#/today" data-tab="today"><span class="ico">☀</span><span>Oggi</span></a>
-    <a href="#/speak" data-tab="speak"><span class="ico">🗣</span><span>Parlare</span></a>
-    <a href="#/listen" data-tab="listen"><span class="ico">🎧</span><span>Ascoltare</span></a>
-    <a href="#/review" data-tab="review"><span class="ico">✎</span><span>Ripasso</span></a>
-    <a href="#/progress" data-tab="progress"><span class="ico">📈</span><span>Progressi</span></a>
+    <a href="#/today" data-tab="today"><span class="ico">☀</span><span>Today</span></a>
+    <a href="#/speak" data-tab="speak"><span class="ico">🗣</span><span>Speak</span></a>
+    <a href="#/listen" data-tab="listen"><span class="ico">🎧</span><span>Listen</span></a>
+    <a href="#/read" data-tab="read"><span class="ico">📖</span><span>Read</span></a>
+    <a href="#/review" data-tab="review"><span class="ico">✎</span><span>Review</span></a>
   </nav>
 
   <div id="toast" role="status" aria-live="polite"></div>

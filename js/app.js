@@ -1,5 +1,8 @@
 import * as store from './store.js';
 import { SKILLS } from './store.js';
+import { lang } from './languages.js';
+
+const L = () => lang(store.get().settings.language);
 
 const view = document.getElementById('view');
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -11,9 +14,10 @@ const mins = (s) => Math.floor(s / 60);
 
 function greeting() {
   const h = new Date().getHours();
-  if (h < 12) return 'Buongiorno';
-  if (h < 18) return 'Buon pomeriggio';
-  return 'Buonasera';
+  const g = L().greetings;
+  if (h < 12) return g.morning;
+  if (h < 18) return g.afternoon;
+  return g.evening;
 }
 
 function toast(msg) {
@@ -39,25 +43,26 @@ function blockCard(skill, { compact = false } = {}) {
   const goal = s.settings.plan[skill] * 60;
   const done = store.daySeconds()[skill];
   const running = s.timer?.skill === skill;
-  const pct = goal ? Math.min(1, done / goal) : 1;
-  const finished = goal > 0 && done >= goal;
+  const bonus = goal === 0;
+  const pct = goal ? Math.min(1, done / goal) : 0;
+  const finished = !bonus && done >= goal;
   const meta = SKILLS[skill];
   return `<article class="block ${running ? 'running' : ''} ${finished ? 'finished' : ''}" data-skill="${skill}">
     <div class="block-head">
       <span class="block-ico" aria-hidden="true">${meta.icon}</span>
       <div class="block-title">
-        <strong>${meta.it}</strong><span class="muted">${meta.label}</span>
+        <strong>${meta.label}</strong>${bonus ? '<span class="muted">Bonus, no daily goal</span>' : ''}
       </div>
       <span class="block-time" data-live="${skill}">${mmss(Math.min(done, 359999))}</span>
-      <span class="muted block-goal">/ ${s.settings.plan[skill]} min</span>
+      ${bonus ? '' : `<span class="muted block-goal">/ ${s.settings.plan[skill]} min</span>`}
     </div>
-    <div class="bar"><span style="width:${pct * 100}%"></span></div>
+    ${bonus ? '' : `<div class="bar"><span style="width:${pct * 100}%"></span></div>`}
     <div class="block-actions">
       <button class="btn ${running ? 'btn-ghost' : 'btn-primary'}" data-action="${running ? 'pause' : 'start'}" data-skill="${skill}">
-        ${running ? 'Pausa' : finished ? 'Continua' : done ? 'Riprendi' : 'Inizia'}
+        ${running ? 'Pause' : finished ? 'Keep going' : done ? 'Resume' : 'Start'}
       </button>
-      ${compact ? '' : `<a class="btn btn-ghost" href="${meta.route}">Apri</a>`}
-      ${finished ? '<span class="badge">Fatto ✓</span>' : ''}
+      ${compact ? '' : `<a class="btn btn-ghost" href="${meta.route}">Open</a>`}
+      ${finished ? '<span class="badge">Done ✓</span>' : ''}
     </div>
   </article>`;
 }
@@ -71,17 +76,18 @@ function viewToday() {
   const streak = store.streak();
   const pct = target ? total / target : 0;
   const order = Object.keys(SKILLS).filter((k) => s.settings.plan[k] > 0);
+  const bonus = Object.keys(SKILLS).filter((k) => !(s.settings.plan[k] > 0));
   const next = order.find((k) => d[k] < s.settings.plan[k] * 60);
 
   return `
   <section class="hero">
     <div class="hero-text">
-      <p class="eyebrow">${new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+      <p class="eyebrow">${new Date().toLocaleDateString(L().locale, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
       <h1>${greeting()}!</h1>
       <p class="muted">${total >= target
-        ? 'Obiettivo raggiunto. Today\'s goal is done. Anything extra is a bonus.'
+        ? `${L().goalDone} Today's goal is done. Anything extra is a bonus.`
         : next ? `Next up: <strong>${SKILLS[next].label.toLowerCase()}</strong>. ${mins(target - total)} min to go.` : ''}</p>
-      <p class="streak" title="Days in a row with your full daily goal">🔥 <strong>${streak}</strong> ${streak === 1 ? 'giorno' : 'giorni'} di fila</p>
+      <p class="streak" title="Days in a row with your full daily goal">🔥 <strong>${streak}</strong> day${streak === 1 ? '' : 's'} in a row</p>
     </div>
     <div class="hero-ring">
       ${ring(pct)}
@@ -89,8 +95,9 @@ function viewToday() {
     </div>
   </section>
 
-  <h2 class="section-title">La tua sessione di oggi</h2>
+  <h2 class="section-title">Today's session</h2>
   <div class="blocks">${order.map((k) => blockCard(k)).join('')}</div>
+  ${bonus.length ? `<h2 class="section-title">Extra</h2><div class="blocks">${bonus.map((k) => blockCard(k)).join('')}</div>` : ''}
 
   ${weekStrip()}
   `;
@@ -104,10 +111,10 @@ function weekStrip() {
   for (let i = 0; i < 7; i++) {
     const key = store.dayKey(d);
     const t = store.totalSeconds(store.daySeconds(key));
-    days.push({ key, label: d.toLocaleDateString('it-IT', { weekday: 'narrow' }), pct: target ? Math.min(1, t / target) : 0, min: mins(t), today: i === 6 });
+    days.push({ key, label: d.toLocaleDateString('en-GB', { weekday: 'narrow' }), pct: target ? Math.min(1, t / target) : 0, min: mins(t), today: i === 6 });
     d.setDate(d.getDate() + 1);
   }
-  return `<h2 class="section-title">Questa settimana</h2>
+  return `<h2 class="section-title">This week</h2>
   <div class="week card">${days.map((x) => `
     <div class="week-day ${x.today ? 'today' : ''} ${x.pct >= 1 ? 'met' : ''}" title="${x.key}: ${x.min} min">
       <div class="week-bar"><span style="height:${Math.max(x.pct * 100, x.min ? 6 : 0)}%"></span></div>
@@ -119,8 +126,8 @@ function weekStrip() {
 function sectionPage(skill, intro, comingSoon, interim) {
   return `
   <section class="page-head">
-    <p class="eyebrow">${SKILLS[skill].label}</p>
-    <h1>${SKILLS[skill].icon} ${SKILLS[skill].it}</h1>
+    <p class="eyebrow">${L().name}</p>
+    <h1>${SKILLS[skill].icon} ${SKILLS[skill].label}</h1>
     <p class="muted">${intro}</p>
   </section>
   ${blockCard(skill, { compact: true })}
@@ -136,17 +143,24 @@ function sectionPage(skill, intro, comingSoon, interim) {
 
 const viewSpeak = () => sectionPage('speak',
   'Speak out loud every day, so grammar and vocabulary come out without thinking.',
-  ['Live conversations and role plays with an Italian voice partner (bar, doctor, neighbours, phone calls).',
+  [`Live conversations and role plays with a ${L().name} voice partner (bar, doctor, neighbours, phone calls).`,
     'A recap after each conversation, with your mistakes saved to your personal log.'],
   `<p>Run the timer while you practise speaking: shadow a podcast out loud, describe your day, or prepare for your lesson with your tutor.</p>
    <p class="muted">Tip: record yourself for a minute and listen back. It's uncomfortable, and it works.</p>`);
 
 const viewListen = () => sectionPage('listen',
-  'Understand real Italian at natural speed, even when you\'re not fully concentrating.',
+  `Understand real ${L().name} at natural speed, even when you're not fully concentrating.`,
   ['Clips with different voices, accents and speeds, from slow to fast native speech.',
     'Dictation and comprehension questions, with the transcript revealed only after you answer.',
     '"Distracted mode" with café and street noise in the background.'],
-  `<p>Run the timer while you watch or listen to Italian content. Choose something slightly too fast for you, and avoid English subtitles.</p>`);
+  `<p>Run the timer while you watch or listen to ${L().name} content. Choose something slightly too fast for you, and avoid English subtitles.</p>`);
+
+const viewRead = () => sectionPage('read',
+  'Read something with real depth, then talk it through, to check you understood the meaning and not just the words.',
+  ['An article with some depth (culture, society, science, opinion), pitched just above your level.',
+    'Straight after reading, a live conversation with a coach who asks what it was about, what the author meant, and what you think, and pushes you to use the article\'s vocabulary.',
+    'New words and phrases from the article added to your review drills.'],
+  `<p>Run the timer while you read a longer article in ${L().name}, for example from a newspaper or magazine you like. Afterwards, summarise it out loud in two minutes without looking.</p>`);
 
 const viewReview = () => sectionPage('review',
   'Turn the mistakes you actually make into short drills, so the right form becomes automatic.',
@@ -157,7 +171,7 @@ const viewReview = () => sectionPage('review',
 function viewProgress() {
   const s = store.get();
   const keys = Object.keys(s.days);
-  const totals = { speak: 0, listen: 0, review: 0 };
+  const totals = Object.fromEntries(Object.keys(SKILLS).map((k) => [k, 0]));
   keys.forEach((k) => { const d = store.daySeconds(k); for (const sk in totals) totals[sk] += d[sk] || 0; });
   const today = store.daySeconds();
   if (!s.days[store.dayKey()]) for (const sk in totals) totals[sk] += today[sk];
@@ -180,8 +194,8 @@ function viewProgress() {
   const max = Math.max(1, ...Object.values(totals));
   return `
   <section class="page-head">
-    <p class="eyebrow">Progress</p>
-    <h1>📈 Progressi</h1>
+    <p class="eyebrow">${L().name}</p>
+    <h1>📈 Progress</h1>
   </section>
   <div class="stats">
     <div class="stat card"><strong>${store.streak()}</strong><span>current streak</span></div>
@@ -209,12 +223,12 @@ function viewSettings() {
   const p = store.get().settings.plan;
   return `
   <section class="page-head">
-    <p class="eyebrow">Settings</p>
-    <h1>⚙ Impostazioni</h1>
+    <p class="eyebrow">Lang Hub</p>
+    <h1>⚙ Settings</h1>
   </section>
   <form class="card" id="plan-form">
     <h3>Daily routine</h3>
-    <p class="muted">Minutes per skill each day. Your streak counts days where you reach the total.</p>
+    <p class="muted">Minutes per skill each day. Your streak counts days where you reach the total. Set a skill to 0 to keep it as an extra without a goal.</p>
     ${Object.keys(SKILLS).map((k) => `
       <label class="field">
         <span>${SKILLS[k].icon} ${SKILLS[k].label}</span>
@@ -249,7 +263,7 @@ function viewSettings() {
 }
 
 // ---------- router ----------
-const routes = { today: viewToday, speak: viewSpeak, listen: viewListen, review: viewReview, progress: viewProgress, settings: viewSettings };
+const routes = { today: viewToday, speak: viewSpeak, listen: viewListen, read: viewRead, review: viewReview, progress: viewProgress, settings: viewSettings };
 
 function currentRoute() {
   const r = (location.hash.replace(/^#\/?/, '') || 'today').split('?')[0];
@@ -258,8 +272,9 @@ function currentRoute() {
 
 function render() {
   const r = currentRoute();
+  document.getElementById('lang-name').textContent = L().native;
   view.innerHTML = routes[r]();
-  document.querySelectorAll('.tabbar a').forEach((a) => a.classList.toggle('active', a.dataset.tab === r));
+  document.querySelectorAll('[data-tab]').forEach((a) => a.classList.toggle('active', a.dataset.tab === r));
   bindView(r);
 }
 
@@ -336,7 +351,7 @@ setInterval(() => {
   const id = `${store.dayKey()}:${sk}`;
   if (goal && d[sk] >= goal && !celebrated.has(id)) {
     celebrated.add(id);
-    toast(`${SKILLS[sk].it}: ${s.settings.plan[sk]} min fatto! Bravo 🎉`);
+    toast(`${SKILLS[sk].label}: ${s.settings.plan[sk]} min done! 🎉`);
     try { navigator.vibrate?.([120, 60, 120]); } catch (e) { /* ignore */ }
     render();
   }
