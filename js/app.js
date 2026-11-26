@@ -5,6 +5,8 @@ import * as coachViews from './coachviews.js';
 import * as listen from './listen.js';
 import * as review from './review.js';
 import * as picks from './picks.js';
+import * as server from './server.js';
+import * as serverViews from './serverviews.js';
 
 const L = () => lang(store.get().settings.language);
 
@@ -266,6 +268,7 @@ function viewSettings() {
     <button class="btn btn-primary" type="submit">Save</button>
   </form>
   ${coachViews.settingsCard()}
+  ${serverViews.settingsCard()}
   ${damagedCard()}
   ${backupCard()}
   <div class="card">
@@ -388,6 +391,7 @@ function render() {
   updateBanner();
   bindView(r);
   coachViews.bind(r, params);
+  serverViews.bind(r, params);
   listen.bind(r, params);
   review.bind(r, params);
 }
@@ -395,9 +399,26 @@ coachViews.init({ render, toast, blockCard, sectionPage, L, esc, mmss });
 listen.init({ render, toast, blockCard, L, esc, mmss });
 review.init({ render, toast, L, esc });
 picks.init({ render, toast, L, esc });
+serverViews.init({ render, toast, esc });
+
+// New content from the content server: reload the lists, but never under an open clip or call.
+let contentStale = false;
+function applyNewContent() {
+  if (!contentStale) return;
+  const { r, params } = currentRoute();
+  if (r === 'call' || (r === 'listen' && params[0])) return; // wait for the next screen change
+  const done = [listen.reset(), coachViews.reset()].every(Boolean);
+  picks.reset();
+  contentStale = !done;
+}
+addEventListener('langhub:newcontent', (e) => {
+  contentStale = true;
+  applyNewContent();
+  if (!contentStale) { toast(`${e.detail} new item${e.detail === 1 ? '' : 's'} written for you.`); render(); }
+});
 coachViews.setReview(review);
 
-window.addEventListener('hashchange', () => { render(); view.focus({ preventScroll: true }); window.scrollTo(0, 0); });
+window.addEventListener('hashchange', () => { applyNewContent(); render(); view.focus({ preventScroll: true }); window.scrollTo(0, 0); });
 
 // ---------- events ----------
 view.addEventListener('click', (e) => {
@@ -506,6 +527,7 @@ setInterval(() => {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { markCelebrated(); render(); } });
 
 render();
+server.start();
 
 // ---------- service worker ----------
 // A new version waits until the user taps "Reload". The page never reloads by

@@ -114,6 +114,56 @@ const check = (cond, msg) => { console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}`); 
   check(((await page.textContent('#view')) || '').length > 20, 'opens offline');
   await ctx.setOffline(false);
 
+  // Content server: generated items show up, the profile is synced, audio comes from the server.
+  {
+    const SRV = 'https://lang-hub-api.test.workers.dev';
+    const clipsJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'content/it/clips.json'), 'utf8'));
+    const genClip = { ...clipsJson.clips[0], id: 'g261126-test-clip', title: 'Clip generato di prova', topics: ['food'] };
+    const items = [
+      { id: genClip.id, kind: 'clip', created_at: 1, data: genClip },
+      { id: 'g261126-test-article', kind: 'article', created_at: 2, data: { id: 'g261126-test-article', title: 'Articolo generato di prova', topic: 'Cibo', level: 'B1', minutes: 3, topics: ['food'], paragraphs: ['Uno.', 'Due.', 'Tre.'], glossary: [['uno', 'one']], discussion: ['x'] } },
+      { id: 'g261126-test-scene', kind: 'scene', created_at: 3, data: { id: 'g261126-test-scene', title: 'Scena generata di prova', subtitle: 'Test', icon: '🧪', minutes: 8, level: 'B1', topics: ['health'], firstMessage: 'Ciao!', instructions: 'Test.' } },
+    ];
+    const seen = { profile: null, audio: 0 };
+    await ctx.route(`${SRV}/**`, async (route) => {
+      const r = route.request(), u = new URL(r.url());
+      const cors = { 'Access-Control-Allow-Origin': BASE.replace(/\/$/, ''), 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, PUT, POST, OPTIONS' };
+      if (r.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+      if (r.headers().authorization !== 'Bearer test-password-0123456789') return route.fulfill({ status: 401, headers: cors, json: { error: 'no' } });
+      if (u.pathname === '/api/items') return route.fulfill({ headers: cors, json: { items: items.filter((x) => x.created_at > Number(u.searchParams.get('since') || 0)), now: 9 } });
+      if (u.pathname === '/api/profile') { seen.profile = JSON.parse(r.postData()); return route.fulfill({ headers: cors, json: { ok: true } }); }
+      if (u.pathname === '/api/status') return route.fulfill({ headers: cors, json: { ok: true, usage: { tts_chars: 1200 }, ttsLimit: 25000, generated: { clip: 1, article: 1, scene: 1 } } });
+      if (u.pathname.startsWith('/api/audio/')) { seen.audio++; return route.fulfill({ headers: { ...cors, 'Content-Type': 'audio/mpeg' }, body: Buffer.alloc(10) }); }
+      return route.fulfill({ status: 404, headers: cors, json: {} });
+    });
+    await page.goto(`${BASE}#/settings`);
+    await page.waitForSelector('#server-form');
+    await page.fill('#server-form input[name=url]', SRV);
+    await page.fill('#server-form input[name=token]', 'test-password-0123456789');
+    await page.click('#server-form button[type=submit]');
+    // Poll from Node: waitForFunction needs eval in some Playwright versions, which the CSP blocks.
+    for (let i = 0; i < 40 && !/Connected/.test((await page.textContent('#server-status').catch(() => '')) || ''); i++) await page.waitForTimeout(200);
+    check(/Connected ✓/.test(await page.textContent('#server-status')), 'content server connects from Settings');
+    check(!!seen.profile && Array.isArray(seen.profile.events) && seen.profile.used.some((k) => k.startsWith('scene:')), 'profile is synced to the server (events and done items)');
+    await page.goto(`${BASE}#/listen`);
+    await page.waitForTimeout(400);
+    let t = await page.textContent('#view');
+    check(t.includes('Clip generato di prova') && t.includes('New for you'), 'generated clip shows in Listening');
+    await page.goto(`${BASE}#/read`);
+    await page.waitForTimeout(400);
+    check((await page.textContent('#view')).includes('Articolo generato di prova'), 'generated article shows in Reading');
+    await page.goto(`${BASE}#/speak`);
+    await page.waitForTimeout(400);
+    check((await page.textContent('#view')).includes('Scena generata di prova'), 'generated scene shows in Speaking');
+    // Audio for a clip that isn't cached comes from the server, not from ElevenLabs.
+    const got = await page.evaluate(async (id) => {
+      const s = await import('./js/server.js');
+      const b = await s.segmentAudio(id, 0);
+      return b.byteLength;
+    }, genClip.id);
+    check(got === 10 && seen.audio === 1, 'clip audio is fetched from the server');
+  }
+
   const csp = await page.evaluate(() => window.__csp);
   check(csp.length === 0, `no CSP violations${csp.length ? `: ${csp.join(', ')}` : ''}`);
   const real = errors.filter((e) => !/ERR_INTERNET_DISCONNECTED|Failed to load resource/.test(e));
