@@ -302,3 +302,14 @@ mark { background: var(--red-soft); color: var(--red); border-radius: 4px; paddi
   body { padding: 0; background: #fff; color: #000; }
   .report { border: 0; box-shadow: none; }
 }
+
+/* update banner (shown by the service worker registration in app.js) */
+#update-banner {
+  position: fixed; left: 50%; transform: translateX(-50%); z-index: 11;
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 16px);
+  display: flex; align-items: center; gap: 12px; max-width: calc(100% - 32px);
+  background: var(--text); color: var(--bg); padding: 8px 8px 8px 16px; border-radius: 12px; font-weight: 600;
+}
+#update-banner .btn { min-height: 36px; padding: 0 14px; }
+body.in-call #update-banner { display: none; }
+@media print { #update-banner { display: none !important; } }

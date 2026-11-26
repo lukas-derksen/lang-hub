@@ -367,13 +367,57 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) { ma
 render();
 
 // ---------- service worker ----------
+// A new version waits until the user taps "Reload". The page never reloads by
+// itself during a live call: the reload waits until the call screen is closed.
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').then((reg) => {
+  const sw = navigator.serviceWorker;
+  const inCall = () => document.body.classList.contains('in-call');
+  let reg = null, wantReload = false, reloading = false, lastCheck = Date.now();
+
+  const reloadWhenFree = () => {
+    if (reloading) return;
+    if (!inCall()) { reloading = true; location.reload(); return; }
+    // Wait for the call screen to close (app.js toggles body.in-call per route).
+    const mo = new MutationObserver(() => { if (!inCall()) { mo.disconnect(); reloadWhenFree(); } });
+    mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  };
+
+  const showUpdate = () => {
+    let bar = document.getElementById('update-banner');
+    if (bar) return;
+    bar = document.createElement('div');
+    bar.id = 'update-banner';
+    bar.setAttribute('role', 'status');
+    bar.innerHTML = '<span>New version</span><button type="button" class="btn btn-primary">Reload</button>';
+    bar.querySelector('button').addEventListener('click', () => {
+      wantReload = true;
+      bar.remove();
+      if (reg?.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      else reloadWhenFree(); // already active (e.g. another tab took the update)
+    });
+    document.body.appendChild(bar);
+  };
+
+  const hadController = !!sw.controller;
+  sw.addEventListener('controllerchange', () => {
+    if (!hadController) return; // first install: nothing to reload
+    if (wantReload) reloadWhenFree();
+    else showUpdate(); // updated from another tab: offer the reload here too
+  });
+
+  sw.register('sw.js').then((r) => {
+    reg = r;
+    if (reg.waiting && sw.controller) showUpdate();
     reg.addEventListener('updatefound', () => {
       const nw = reg.installing;
-      nw?.addEventListener('statechange', () => {
-        if (nw.state === 'installed' && navigator.serviceWorker.controller) toast('A new version is ready. It will load next time you open the app.');
-      });
+      nw?.addEventListener('statechange', () => { if (nw.state === 'installed' && sw.controller) showUpdate(); });
     });
   }).catch(() => { /* offline support unavailable */ });
+
+  // Look for a new version when the app comes back to the foreground, at most once an hour.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || !reg || Date.now() - lastCheck < 3600e3) return;
+    lastCheck = Date.now();
+    reg.update().catch(() => { /* offline */ });
+  });
 }
