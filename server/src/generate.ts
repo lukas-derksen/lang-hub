@@ -137,20 +137,38 @@ export function finish(kind: Kind, raw: any, b: Brief, now: number): { id: strin
   return { id, data: { id, cards } };
 }
 
-/** Ask Claude for one item. Returns the parsed object and token usage. */
-export async function write(client: Anthropic, model: string, b: Brief): Promise<{ raw: any; usage: { input: number; output: number } }> {
+export type Usage = { input: number; output: number };
+
+/** Writing failed after Claude answered: carries the tokens that answer cost, so they're counted. */
+export class WriteError extends Error {
+  readonly usage?: Usage;
+  constructor(message: string, usage?: Usage) { super(message); this.usage = usage; }
+}
+
+/**
+ * Ask Claude for one item. Returns the parsed object and token usage.
+ * Uses create() and parses here (not messages.parse()), so that a reply that doesn't
+ * parse still reports its usage: WriteError.usage. An API error (no reply) throws as is.
+ */
+export async function write(client: Anthropic, model: string, b: Brief): Promise<{ raw: any; usage: Usage }> {
   const { schema, prompt } = task(b);
-  const res = await client.beta.messages.parse({
+  const format = betaZodOutputFormat(schema);
+  const res = await client.beta.messages.create({
     model,
     max_tokens: 16000,
-    betas: ['server-side-fallback-2026-07-01'],
+    // structured-outputs is the beta header messages.parse() adds itself.
+    betas: ['server-side-fallback-2026-07-01', 'structured-outputs-2025-12-15'],
     fallbacks: 'default', // if a safety check declines, the API retries on a suitable model
-    output_config: { effort: 'medium', format: betaZodOutputFormat(schema) },
+    output_config: { effort: 'medium', format: { type: 'json_schema', schema: format.schema } },
     system: 'You write learning material for an Italian language app. Your Italian is natural, idiomatic and correct; level and length instructions are firm.',
     messages: [{ role: 'user', content: prompt }],
   });
-  if (res.stop_reason === 'refusal') throw new Error('Claude declined to write this item');
-  if (res.stop_reason === 'max_tokens') throw new Error('Output was cut off');
-  if (!res.parsed_output) throw new Error('Output did not match the schema');
-  return { raw: res.parsed_output, usage: { input: res.usage.input_tokens, output: res.usage.output_tokens } };
+  const usage: Usage = { input: res.usage?.input_tokens || 0, output: res.usage?.output_tokens || 0 };
+  if (res.stop_reason === 'refusal') throw new WriteError('Claude declined to write this item', usage);
+  if (res.stop_reason === 'max_tokens') throw new WriteError('Output was cut off', usage);
+  const text = res.content.find((c) => c.type === 'text')?.text;
+  let raw: any;
+  try { raw = text ? format.parse(text) : null; } catch { raw = null; }
+  if (!raw) throw new WriteError('Output did not match the schema', usage);
+  return { raw, usage };
 }
