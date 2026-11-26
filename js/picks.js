@@ -2,6 +2,7 @@
 // learned" card. The ranking itself lives in recommend.js.
 import * as store from './store.js';
 import * as rec from './recommend.js';
+import * as server from './server.js';
 
 let H = {}; // helpers from app.js: render, toast, L, esc
 export function init(helpers) { H = helpers; }
@@ -22,9 +23,9 @@ function loadCatalog() {
         level: x.level || 'B1', d: rec.levelNum(x.level), ...extra,
       });
       cat = [
-        ...scenes.map((x) => item('scene', 'speak', x, { icon: x.icon, sub: x.subtitle })),
-        ...articles.map((x) => item('article', 'read', x, { minutes: x.minutes })),
-        ...clips.clips.map((x) => item('clip', 'listen', x, { questions: x.questions.length, sub: x.genre })),
+        ...[...server.byKind('scene'), ...scenes].map((x) => item('scene', 'speak', x, { icon: x.icon, sub: x.subtitle })),
+        ...[...server.byKind('article'), ...articles].map((x) => item('article', 'read', x, { minutes: x.minutes })),
+        ...[...server.byKind('clip'), ...clips.clips].map((x) => item('clip', 'listen', x, { questions: x.questions.length, sub: x.genre })),
       ];
       catError = false;
     })
@@ -34,6 +35,9 @@ function loadCatalog() {
 }
 const routeName = () => (location.hash.replace(/^#\/?/, '') || 'today').split(/[/?]/)[0];
 const byKey = (k) => cat?.find((x) => x.key === k);
+
+/** Forget the catalog (new content arrived). Today's picks stay as chosen until tomorrow. */
+export function reset() { cat = null; catLoading = null; catError = false; }
 
 /** Ratings for an item from the catalog, for screens that only know the key. */
 export function itemFor(key) { return byKey(key); }

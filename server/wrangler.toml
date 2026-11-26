@@ -1,0 +1,36 @@
+# Lang Hub content server (Cloudflare Worker). Deployed by .github/workflows/deploy-server.yml,
+# which fills in the database and KV ids below and sets the secrets.
+name = "lang-hub-api"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_compat"]
+minify = true
+
+[vars]
+# The app's origins allowed to call the API (comma-separated).
+ALLOWED_ORIGINS = "https://lukas-derksen.github.io,http://localhost:8000,http://127.0.0.1:8000"
+# Claude model that writes new content.
+MODEL = "claude-opus-5-5"
+# ElevenLabs text to speech, same model and settings as the app (js/listen.js).
+TTS_MODEL = "eleven_multilingual_v2"
+# Most new items per week, per kind (the budget Lukas chose: 2 to 3 clips a week).
+CLIPS_PER_WEEK = "3"
+ARTICLES_PER_WEEK = "2"
+SCENES_PER_WEEK = "1"
+CARD_BATCHES_PER_WEEK = "1"
+# Most ElevenLabs characters the server voices per calendar month (about 1 credit each).
+TTS_MONTHLY_CHARS = "25000"
+
+# Every day at 04:30 UTC: top up new content where you're running low.
+[triggers]
+crons = ["30 4 * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lang-hub"
+database_id = "__D1_ID__"
+migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "AUDIO"
+id = "__KV_ID__"

@@ -3,6 +3,7 @@ import * as store from './store.js';
 import * as coach from './coach.js';
 import * as rec from './recommend.js';
 import { ratingCard } from './picks.js';
+import * as server from './server.js';
 
 let H = {}; // helpers from app.js: render, toast, blockCard, sectionPage, L, esc, mmss
 export function init(helpers) { H = helpers; }
@@ -31,7 +32,15 @@ let contentPromise = null;
 function loadContent() {
   contentPromise ||= Promise.all(['scenes', 'cards', 'articles'].map((n) =>
     fetch(`${H.L().content}${n}.json`).then((r) => { if (!r.ok) throw new Error(n); return r.json(); })))
-    .then(([scenes, cards, articles]) => { Object.assign(content, { scenes, cards, articles, error: null }); })
+    .then(([scenes, cards, articles]) => {
+      // Content written for you by your content server (if set up) comes first.
+      Object.assign(content, {
+        scenes: [...server.byKind('scene'), ...scenes],
+        cards: [...cards, ...server.byKind('cards').flatMap((b) => b.cards || [])],
+        articles: [...server.byKind('article'), ...articles],
+        error: null,
+      });
+    })
     .catch(() => {
       // Forget the failed attempt so "Try again" (or coming back online) can retry.
       contentPromise = null;
@@ -40,6 +49,8 @@ function loadContent() {
     .finally(() => H.render());
   return contentPromise;
 }
+/** Forget the loaded lists (new content arrived). Not during a call. */
+export function reset() { if (call) return false; Object.assign(content, { scenes: null, cards: null, articles: null, error: null }); contentPromise = null; return true; }
 function ready() {
   if (content.scenes) return true;
   if (!content.error) loadContent(); // after a failure, wait for a retry instead of looping
@@ -131,6 +142,7 @@ export function viewSpeak() {
   <div class="scene-grid">${content.scenes.map((sc) => `
     <button class="scene card" data-action="call-scene" data-id="${sc.id}" ${ok ? '' : 'disabled'}>
       <span class="scene-ico" aria-hidden="true">${sc.icon}</span>
+      ${sc.generated && !store.get().calls.some((c) => c.mode === 'scene' && c.ref === sc.id) ? '<span class="pill pill-new">New for you</span>' : ''}
       <strong>${esc(sc.title)}</strong>
       <span class="muted small">${esc(sc.subtitle)}</span>
       <span class="muted small">up to ${Math.min(sc.minutes, coach.MAX_CALL_MINUTES)} min</span>
@@ -199,6 +211,7 @@ export function viewRead(id) {
   <div class="article-list">${content.articles.map((a) => {
     const done = store.get().calls.some((c) => c.mode === 'read' && c.ref === a.id);
     return `<a class="card article-row" href="#/read/${a.id}">
+      ${a.generated && !done ? '<span class="pill pill-new">New for you</span>' : ''}
       <span class="muted small">${esc(a.topic)} · ${esc(a.level)} · ${a.minutes} min read${done ? ' · discussed ✓' : ''}</span>
       <strong>${esc(a.title)}</strong>
     </a>`;

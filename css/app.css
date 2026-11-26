@@ -125,6 +125,7 @@ main { max-width: 640px; margin: 0 auto; padding: 8px 16px 0; outline: none; }
 .pick-reason { color: var(--accent); font-weight: 600; margin: 0; }
 .pick.done .pick-reason { color: var(--muted); }
 .rate-card .chips { margin: 6px 0; }
+.pill.pill-new { margin: 0; align-self: flex-start; padding: 2px 10px; font-size: .75rem; }
 
 .bar { height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; margin-top: 12px; }
 .bar > span { display: block; height: 100%; background: var(--accent); border-radius: inherit; transition: width .4s ease; }

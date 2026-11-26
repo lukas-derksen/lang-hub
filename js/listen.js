@@ -3,6 +3,7 @@
 import * as store from './store.js';
 import { levelNum } from './recommend.js';
 import { ratingCard } from './picks.js';
+import * as server from './server.js';
 
 let H = {};
 export function init(helpers) { H = helpers; }
@@ -25,7 +26,7 @@ function ready() {
   if (loadErr) return false; // retried on 'online' or with the Try again button
   loadingP ||= fetch(`${H.L().content}clips.json`)
     .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-    .then((d) => { data = d; afterLoad(); })
+    .then((d) => { data = { ...d, clips: [...server.byKind('clip'), ...d.clips] }; afterLoad(); })
     .catch(() => { loadErr = 'Could not load the clips. Connect to the internet and try again.'; loadingP = null; })
     .finally(() => H.render());
   return false;
@@ -36,6 +37,8 @@ function retryLoad() {
   if (location.hash.startsWith('#/listen')) H.render(); // render calls ready(), which fetches again
 }
 window.addEventListener('online', retryLoad);
+/** Forget the loaded clips (new ones arrived from the content server). Not while a clip is open. */
+export function reset() { if (player) return false; data = null; loadErr = null; loadingP = null; return true; }
 
 const chars = (clip) => clip.segments.reduce((a, s) => a + s.text.length, 0);
 const credits = (n) => Math.round(n * CREDITS_PER_CHAR).toLocaleString('en-GB');
@@ -126,6 +129,12 @@ async function fetchSegment(clip, i) {
   const url = segUrl(clip, i);
   let cache = null;
   try { cache = await caches.open(CLIP_CACHE); const hit = await cache.match(url); if (hit) return hit.arrayBuffer(); } catch (e) { /* no cache */ }
+  if (server.enabled()) {
+    // Voiced once on your content server and shared by all your devices.
+    const buf = await server.segmentAudio(clip.id, i);
+    try { await cache?.put(url, new Response(buf.slice(0), { headers: { 'Content-Type': 'audio/mpeg' } })); } catch (e) { /* storage full */ }
+    return buf;
+  }
   const key = store.getApiKey();
   if (!key) throw new Error('Add your ElevenLabs API key in Settings to voice new clips.');
   const seg = clip.segments[i];
@@ -266,7 +275,7 @@ export function viewListen(id) {
   if (id) return clipView(id);
   cleanupPlayer();
   const results = store.get().listening || {};
-  const hasKey = !!store.getApiKey();
+  const hasKey = !!store.getApiKey() || server.enabled();
   return `
   <section class="page-head">
     <p class="eyebrow">${H.L().name}</p>
@@ -278,6 +287,7 @@ export function viewListen(id) {
     const r = results[c.id];
     const sp = speakersOf(c);
     return `<a class="card article-row" href="#/listen/${c.id}">
+      ${c.generated && !r ? '<span class="pill pill-new">New for you</span>' : ''}
       <span class="muted small">${esc(c.genre)} · ${esc(c.level)} · ${sp.map((v) => `${esc(v.name)} (${esc(v.accent)})`).join(', ')}</span>
       <strong lang="it">${esc(c.title)}</strong>
       ${r ? `<span class="small done">Best: ${r.best}/${c.questions.length}${r.dict != null ? ` · dictation ${r.dict}%` : ''}</span>` : `<span class="muted small" data-cost="${c.id}"></span>`}
@@ -400,7 +410,7 @@ async function ensurePlayer(c) {
   cleanupPlayer();
   const status = document.getElementById('clip-status');
   const cached = await isCached(c);
-  if (!cached && status) status.textContent = `Voicing this clip with ElevenLabs (about ${credits(chars(c))} credits, once)…`;
+  if (!cached && status) status.textContent = server.enabled() ? 'Getting the audio from your content server…' : `Voicing this clip with ElevenLabs (about ${credits(chars(c))} credits, once)…`;
   const buffer = await buildClipBuffer(c, (i, n) => { if (!cached && status && n > 1) status.textContent = `Voicing part ${i} of ${n}…`; });
   markVoiced(c.id);
   const url = URL.createObjectURL(toWav(buffer));
@@ -457,7 +467,7 @@ document.addEventListener('click', async (e) => {
     const playBtn = document.querySelector('[data-action=clip-play]');
     // Audio voiced before but cleared from this device (storage pressure, site data
     // cleared): ask before spending credits on it again.
-    if (player?.clipId !== c.id && !revoiceOk.has(c.id) && voicedSet().has(c.id)) {
+    if (player?.clipId !== c.id && !revoiceOk.has(c.id) && !server.enabled() && voicedSet().has(c.id)) {
       const miss = await missingSegments(c);
       if (miss.length) {
         const n = miss.reduce((a, i) => a + c.segments[i].text.length, 0);
@@ -502,7 +512,7 @@ function rerenderKeepingPlayer() { keepPlayer = true; const y = window.scrollY; 
 export function bind(r, params) {
   if (r !== 'listen') { if (player) { cleanupPlayer(); if (store.get().timer?.skill === 'listen') store.stopTimer(); } return; }
   if (!params[0]) {
-    if (data) data.clips.forEach(async (c) => { const el = document.querySelector(`[data-cost="${c.id}"]`); if (el) el.textContent = (await isCached(c)) ? 'Ready offline' : `New · about ${credits(chars(c))} credits to voice`; });
+    if (data) data.clips.forEach(async (c) => { const el = document.querySelector(`[data-cost="${c.id}"]`); if (el) el.textContent = (await isCached(c)) ? 'Ready offline' : server.enabled() ? 'Not downloaded yet' : `New · about ${credits(chars(c))} credits to voice`; });
     return;
   }
   if (player && player.clipId !== params[0] && !keepPlayer) cleanupPlayer();
