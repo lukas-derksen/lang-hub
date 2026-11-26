@@ -141,7 +141,8 @@ const check = (cond, msg) => { console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}`); 
     await page.fill('#server-form input[name=url]', SRV);
     await page.fill('#server-form input[name=token]', 'test-password-0123456789');
     await page.click('#server-form button[type=submit]');
-    await page.waitForFunction(() => /Connected/.test(document.getElementById('server-status')?.textContent || ''), null, { timeout: 8000 }).catch(() => {});
+    // Poll from Node: waitForFunction needs eval in some Playwright versions, which the CSP blocks.
+    for (let i = 0; i < 40 && !/Connected/.test((await page.textContent('#server-status').catch(() => '')) || ''); i++) await page.waitForTimeout(200);
     check(/Connected ✓/.test(await page.textContent('#server-status')), 'content server connects from Settings');
     check(!!seen.profile && Array.isArray(seen.profile.events) && seen.profile.used.some((k) => k.startsWith('scene:')), 'profile is synced to the server (events and done items)');
     await page.goto(`${BASE}#/listen`);
