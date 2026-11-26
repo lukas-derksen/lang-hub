@@ -6,31 +6,118 @@ let H = {};
 export function init(helpers) { H = helpers; }
 const esc = (s) => H.esc(s);
 
+// Text to speech model for clips. eleven_multilingual_v2 sounds most natural and
+// costs about 1 credit per character; eleven_flash_v2_5 costs about half (0.5 per
+// character) but sounds flatter. Changing it re-voices clips on their next play.
 const TTS_MODEL = 'eleven_multilingual_v2';
+const CREDITS_PER_CHAR = { eleven_flash_v2_5: 0.5, eleven_turbo_v2_5: 0.5 }[TTS_MODEL] ?? 1;
+const VOICE_SETTINGS = { stability: 0.4, similarity_boost: 0.8, style: 0.25, speed: 1.0 };
 const CLIP_CACHE = 'lhclips-v1'; // separate from the app-shell cache so updates keep clips
+const VOICED_KEY = 'langhub.voiced'; // clip ids voiced on this device (not in the backup)
 const GAP = 0.45; // seconds of silence between dialogue turns
 
 // ---------- content ----------
 let data = null, loadErr = null, loadingP = null;
 function ready() {
   if (data) return true;
-  loadingP ||= fetch(`${H.L().content}clips.json`).then((r) => r.json()).then((d) => { data = d; })
-    .catch(() => { loadErr = 'Could not load the clips. Open the app once while online, then reload.'; })
+  if (loadErr) return false; // retried on 'online' or with the Try again button
+  loadingP ||= fetch(`${H.L().content}clips.json`)
+    .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+    .then((d) => { data = d; afterLoad(); })
+    .catch(() => { loadErr = 'Could not load the clips. Connect to the internet and try again.'; loadingP = null; })
     .finally(() => H.render());
   return false;
 }
+function retryLoad() {
+  if (data || loadingP) return;
+  loadErr = null;
+  if (location.hash.startsWith('#/listen')) H.render(); // render calls ready(), which fetches again
+}
+window.addEventListener('online', retryLoad);
+
 const chars = (clip) => clip.segments.reduce((a, s) => a + s.text.length, 0);
+const credits = (n) => Math.round(n * CREDITS_PER_CHAR).toLocaleString('en-GB');
 const speakersOf = (clip) => [...new Set(clip.segments.map((s) => s.voice))].map((v) => data.voices[v]);
 
 // ---------- audio generation + cache ----------
-const segUrl = (clip, i) => new URL(`clips-cache/${clip.id}-${i}-${data.voices[clip.segments[i].voice].id}.mp3`, location.href).href;
+/** FNV-1a 32-bit hash as 8 hex digits: short and stable, not for security. */
+function fnv1a(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+// The cache URL includes a hash of the text, model and voice settings, so editing a
+// clip's text (or the model) voices it again instead of playing the old audio.
+const segHash = (seg) => fnv1a(`${seg.text}\u0000${TTS_MODEL}\u0000${JSON.stringify(VOICE_SETTINGS)}`);
+const segBase = (clip, i) => `${clip.id}-${i}-${data.voices[clip.segments[i].voice].id}`;
+const segUrl = (clip, i) => new URL(`clips-cache/${segBase(clip, i)}-${segHash(clip.segments[i])}.mp3`, location.href).href;
 
-async function isCached(clip) {
+function voicedSet() { try { return new Set(JSON.parse(localStorage.getItem(VOICED_KEY)) || []); } catch (e) { return new Set(); } }
+function markVoiced(id) {
+  const s = voicedSet(); if (s.has(id)) return;
+  s.add(id); try { localStorage.setItem(VOICED_KEY, JSON.stringify([...s])); } catch (e) { /* storage full */ }
+}
+
+/** Indexes of the segments that aren't in the cache yet. */
+async function missingSegments(clip) {
   try {
     const c = await caches.open(CLIP_CACHE);
     const hits = await Promise.all(clip.segments.map((_, i) => c.match(segUrl(clip, i))));
-    return hits.every(Boolean);
-  } catch (e) { return false; }
+    return hits.map((h, i) => (h ? -1 : i)).filter((i) => i >= 0);
+  } catch (e) { return clip.segments.map((_, i) => i); }
+}
+
+/**
+ * Once after the clips load (when idle): move audio cached under the old key format
+ * (no hash; clips.json hasn't changed since then, so it matches the current text)
+ * to the new key, and delete audio that no longer matches any current segment.
+ * Entries whose clip id isn't in this language's clips are left alone.
+ */
+async function cleanClipCache() {
+  try {
+    const c = await caches.open(CLIP_CACHE);
+    const current = new Map(); // base -> hashed url
+    data.clips.forEach((clip) => clip.segments.forEach((_, i) => current.set(segBase(clip, i), segUrl(clip, i))));
+    const ids = new Set(data.clips.map((x) => x.id));
+    const wanted = new Set(current.values());
+    for (const req of await c.keys()) {
+      if (wanted.has(req.url)) continue;
+      const m = req.url.match(/\/clips-cache\/(.+)-(\d+)-([A-Za-z0-9]+)(?:-([0-9a-f]{8}))?\.mp3$/);
+      if (!m || !ids.has(m[1])) continue;
+      const base = `${m[1]}-${m[2]}-${m[3]}`;
+      if (!m[4] && current.has(base) && !(await c.match(current.get(base)))) {
+        await c.put(current.get(base), await c.match(req)); // legacy key -> hashed key
+        markVoiced(m[1]);
+      }
+      await c.delete(req);
+    }
+  } catch (e) { /* no Cache Storage */ }
+}
+function afterLoad() {
+  const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1500));
+  idle(() => cleanClipCache());
+}
+
+/** Readable message for an ElevenLabs error response (detail.status says why). */
+async function ttsError(res, clip) {
+  let code = '', msg = '';
+  try {
+    const j = await res.json();
+    const d = j?.detail;
+    if (d && typeof d === 'object') { code = d.status || d.code || ''; msg = d.message || ''; } else if (typeof d === 'string') msg = d;
+  } catch (e) { /* not JSON */ }
+  if (code === 'quota_exceeded') return `Not enough ElevenLabs credits left this month to voice this clip (about ${credits(chars(clip))} needed).`;
+  if (code === 'invalid_api_key') return 'ElevenLabs rejected the API key. Check it in Settings.';
+  if (code === 'missing_permissions' || res.status === 403) return 'Your API key needs the "Text to Speech" permission for new clips.';
+  if (res.status === 429 || code === 'too_many_concurrent_requests' || code === 'system_busy') return 'ElevenLabs is busy right now (too many requests). Wait a moment and try again.';
+  if (res.status === 401) return `ElevenLabs refused the request${msg ? `: ${msg}` : '. Check your key in Settings.'}`;
+  return `ElevenLabs couldn't voice this clip (${res.status}${msg ? `: ${msg}` : ''}).`;
+}
+
+async function isCached(clip) {
+  const ok = (await missingSegments(clip)).length === 0;
+  if (ok) markVoiced(clip.id);
+  return ok;
 }
 
 async function fetchSegment(clip, i) {
@@ -45,12 +132,10 @@ async function fetchSegment(clip, i) {
     res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${data.voices[seg.voice].id}?output_format=mp3_44100_128`, {
       method: 'POST',
       headers: { 'xi-api-key': key, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
-      body: JSON.stringify({ text: seg.text, model_id: TTS_MODEL, voice_settings: { stability: 0.4, similarity_boost: 0.8, style: 0.25, speed: 1.0 } }),
+      body: JSON.stringify({ text: seg.text, model_id: TTS_MODEL, voice_settings: VOICE_SETTINGS }),
     });
   } catch (e) { throw new Error('Could not reach ElevenLabs. Check your internet connection.'); }
-  if (res.status === 401) throw new Error('ElevenLabs rejected the API key. Check it in Settings.');
-  if (res.status === 403) throw new Error('Your API key needs the "Text to Speech" permission for new clips.');
-  if (!res.ok) throw new Error(`ElevenLabs couldn't voice this clip (${res.status}).`);
+  if (!res.ok) throw new Error(await ttsError(res, clip));
   const buf = await res.arrayBuffer();
   try { await cache?.put(url, new Response(buf.slice(0), { headers: { 'Content-Type': 'audio/mpeg' } })); } catch (e) { /* storage full */ }
   return buf;
@@ -168,7 +253,7 @@ function cleanupPlayer() {
 
 // ---------- views ----------
 export function viewListen(id) {
-  if (!ready()) return `<section class="page-head"><h1>🎧 Listening</h1></section><div class="card"><p class="muted">${loadErr || 'Loading…'}</p></div>`;
+  if (!ready()) return `<section class="page-head"><h1>🎧 Listening</h1></section><div class="card"><p class="muted">${loadErr || 'Loading…'}</p>${loadErr ? '<button class="btn btn-ghost" data-action="clips-retry">Try again</button>' : ''}</div>`;
   if (id) return clipView(id);
   cleanupPlayer();
   const results = store.get().listening || {};
@@ -301,8 +386,9 @@ async function ensurePlayer(c) {
   cleanupPlayer();
   const status = document.getElementById('clip-status');
   const cached = await isCached(c);
-  if (!cached && status) status.textContent = `Voicing this clip with ElevenLabs (about ${chars(c).toLocaleString('en-GB')} credits, once)…`;
+  if (!cached && status) status.textContent = `Voicing this clip with ElevenLabs (about ${credits(chars(c))} credits, once)…`;
   const buffer = await buildClipBuffer(c, (i, n) => { if (!cached && status && n > 1) status.textContent = `Voicing part ${i} of ${n}…`; });
+  markVoiced(c.id);
   const url = URL.createObjectURL(toWav(buffer));
   const audio = new Audio(url);
   audio.preservesPitch = true; audio.playbackRate = prefs.speed;
@@ -327,22 +413,41 @@ function updateTime() {
   if (seek && isFinite(d)) { seek.disabled = false; seek.value = Math.round((t / d) * 1000); }
 }
 
+const revoiceOk = new Set(); // clips the user agreed to voice again this session
+
 document.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-action]');
+  if (btn?.dataset.action === 'clips-retry') { retryLoad(); return; }
   if (!btn || !data) return;
   const id = location.hash.split('/')[2];
   const c = data.clips.find((x) => x.id === id);
   const act = btn.dataset.action;
   if (!c || !act.startsWith('clip-') && !act.startsWith('dict-')) return;
   const a = answers[id];
-  if (act === 'clip-play') {
-    btn.disabled = true;
+  if (act === 'clip-cancel') {
+    const s = document.getElementById('clip-status'); if (s) s.textContent = '';
+  } else if (act === 'clip-play' || act === 'clip-revoice') {
+    if (act === 'clip-revoice') revoiceOk.add(c.id);
+    const playBtn = document.querySelector('[data-action=clip-play]');
+    // Audio voiced before but cleared from this device (storage pressure, site data
+    // cleared): ask before spending credits on it again.
+    if (player?.clipId !== c.id && !revoiceOk.has(c.id) && voicedSet().has(c.id)) {
+      const miss = await missingSegments(c);
+      if (miss.length) {
+        const n = miss.reduce((a, i) => a + c.segments[i].text.length, 0);
+        const s = document.getElementById('clip-status');
+        if (s) s.innerHTML = `This clip's audio was cleared from this device. Voicing it again costs about ${credits(n)} credits.
+          <span class="row"><button class="btn btn-primary" data-action="clip-revoice">Voice it again</button> <button class="btn btn-ghost" data-action="clip-cancel">Cancel</button></span>`;
+        return;
+      }
+    }
+    if (playBtn) playBtn.disabled = true;
     try {
       const p = await ensurePlayer(c);
       if (p.audio.paused) { ctx().resume?.(); await p.audio.play(); } else p.audio.pause();
     } catch (err) {
       const s = document.getElementById('clip-status'); if (s) s.textContent = err.message;
-    } finally { btn.disabled = false; updatePlayBtn(); }
+    } finally { if (playBtn) playBtn.disabled = false; updatePlayBtn(); }
   } else if (act === 'clip-back' && player) {
     player.audio.currentTime = Math.max(0, player.audio.currentTime - 5);
   } else if (act === 'clip-speed') {
@@ -371,7 +476,7 @@ function rerenderKeepingPlayer() { keepPlayer = true; const y = window.scrollY; 
 export function bind(r, params) {
   if (r !== 'listen') { if (player) { cleanupPlayer(); if (store.get().timer?.skill === 'listen') store.stopTimer(); } return; }
   if (!params[0]) {
-    if (data) data.clips.forEach(async (c) => { const el = document.querySelector(`[data-cost="${c.id}"]`); if (el) el.textContent = (await isCached(c)) ? 'Ready offline' : `New · about ${chars(c).toLocaleString('en-GB')} credits to voice`; });
+    if (data) data.clips.forEach(async (c) => { const el = document.querySelector(`[data-cost="${c.id}"]`); if (el) el.textContent = (await isCached(c)) ? 'Ready offline' : `New · about ${credits(chars(c))} credits to voice`; });
     return;
   }
   if (player && player.clipId !== params[0] && !keepPlayer) cleanupPlayer();
