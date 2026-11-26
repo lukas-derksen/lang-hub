@@ -172,11 +172,25 @@ async function buildClipBuffer(clip, onProgress) {
   const out = ctx().createBuffer(1, len, sr);
   const o = out.getChannelData(0);
   let pos = 0;
-  decoded.forEach((b, i) => { o.set(b.getChannelData(0), pos); pos += b.length + (i < decoded.length - 1 ? gap : 0); });
+  const spans = []; // [start, end] in seconds of each segment, for shadowing
+  decoded.forEach((b, i) => { o.set(b.getChannelData(0), pos); spans.push([pos / sr, (pos + b.length) / sr]); pos += b.length + (i < decoded.length - 1 ? gap : 0); });
+  out.spans = spans;
   return out;
 }
 
-function toWav(buffer) {
+/** For shadowing (js/shadow.js): the clip's audio, voiced or cached as for listening. */
+export async function clipAudio(c, onProgress) {
+  if (player?.clipId === c.id) return player.buffer;
+  const b = await buildClipBuffer(c, onProgress);
+  markVoiced(c.id);
+  return b;
+}
+/** The clips once loaded (null while loading; calling it starts the load). */
+export function clips() { return ready() ? data : null; }
+export const voiceOf = (c, seg) => data.voices[seg.voice];
+export { ctx as audioContext, startNoise, stopNoise };
+
+export function toWav(buffer) {
   const d = buffer.getChannelData(0), sr = buffer.sampleRate, n = d.length;
   const ab = new ArrayBuffer(44 + n * 2), v = new DataView(ab);
   const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
@@ -299,6 +313,7 @@ export function viewListen(id) {
       ${r ? `<span class="small done">Best: ${Number(r.best) || 0}/${c.questions.length}${r.dict != null ? ` · dictation ${Number(r.dict) || 0}%` : ''}</span>` : `<span class="muted small" data-cost="${esc(c.id)}"></span>`}
     </a>`;
   }).join('')}</div>
+  ${H.videosSection ? H.videosSection() : ''}
   <h2 class="section-title">Your own listening</h2>
   ${H.blockCard('listen', { compact: true })}
   <p class="muted small">Watching a series or a podcast? Run the timer. Clips here count automatically while you work on them.</p>`;
@@ -361,6 +376,12 @@ function clipView(id) {
     <p class="muted small">Write down the sentence that starts with <em lang="it">"${esc(c.dictation.split(' ').slice(0, 3).join(' '))}…"</em></p>
     <textarea id="dict" rows="3" lang="it" spellcheck="false" autocapitalize="off" ${a.dictChecked ? 'disabled' : ''}>${esc(a.dictation)}</textarea>
     ${a.dictChecked ? dictResult(c, a) : '<button class="btn btn-primary" data-action="dict-check">Check</button>'}
+  </div>
+
+  <div class="card shadow-cta">
+    <h3>🗣 Shadow it</h3>
+    <p class="muted small">Repeat the clip sentence by sentence, right after the speaker, and see how your rhythm and melody compare.</p>
+    <a class="btn btn-ghost" href="#/shadow/${esc(c.id)}">Shadow this clip</a>
   </div>
 
   <div class="card">

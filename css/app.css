@@ -353,3 +353,35 @@ body.has-call-bar #toast { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bo
 .sheet { position: fixed; inset: 0; z-index: 20; display: grid; place-items: end center; padding: 16px; background: rgba(0, 0, 0, .35); }
 .sheet-card { width: 100%; max-width: 480px; margin: 0 0 env(safe-area-inset-bottom); }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
+
+/* ---------- shadowing and real Italian videos ---------- */
+.sh-nav { justify-content: space-between; flex-wrap: nowrap; }
+.sh-text { font-size: 1.2rem; line-height: 1.6; margin: 12px 0; min-height: 2.2em; }
+.sh-text.hidden-text { color: var(--muted); letter-spacing: .08em; }
+.attempt { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; }
+.scores { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
+.scores > div { background: var(--surface-2); border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.scores strong { font-size: 1.25rem; }
+.scores strong.small { font-size: .9rem; }
+.contour { width: 100%; height: auto; max-height: 120px; display: block; }
+.contour polyline { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.contour .c-model { stroke: var(--muted); }
+.contour .c-you { stroke: var(--accent); }
+.legend { display: flex; gap: 8px; align-items: center; margin: 4px 0 8px; color: var(--muted); }
+.legend span { display: inline-block; width: 18px; height: 3px; border-radius: 2px; }
+.legend .key-model { background: var(--muted); }
+.legend .key-you { background: var(--accent); margin-left: 8px; }
+.tips { margin: 8px 0; padding-left: 1.2em; }
+.video-row { flex-direction: row; align-items: center; gap: 12px; }
+.video-row .thumb { width: 120px; height: 68px; object-fit: cover; border-radius: 10px; flex: none; background: var(--surface-2); }
+.video-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.video-frame { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 10px; }
+.video-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.video-error { color: var(--red); }
+.phrases { margin: 0; padding-left: 1.4em; display: grid; gap: 8px; }
+.phrase { padding: 6px 8px; border-radius: 12px; }
+.phrase.sel { background: var(--accent-soft); }
+.phrase .nudge { gap: 4px; margin-top: 4px; }
+.phrase .nudge .chip { min-height: 32px; padding: 0 10px; font-size: .8rem; }
+.add-video .btn { margin-top: 4px; }
+@media (max-width: 420px) { .video-row .thumb { width: 96px; height: 54px; } }

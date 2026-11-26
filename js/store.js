@@ -29,6 +29,9 @@ const DEFAULTS = {
   mistakes: [], // { id, at, said, correct, explanation, category, source }
   calls: [],    // { at, mode, title, seconds, mistakes }
   listening: {}, // clipId -> { best, dict, tries, last }
+  shadowing: {}, // clipId or 'yt:<videoId>' -> { tries, last, best: { sentenceIndex: score 0–100 } }
+  videos: [],    // YouTube videos you added: { id, title, addedAt }
+  phrases: {},   // videoId -> [{ start, end, rating? }] in seconds: phrases you marked to practise
   drills: [],   // { at, cards, right, seconds }
   reports: [],  // { at, days, cats: { category: rate } }
   events: [],   // engagement for personal picks, see js/recommend.js: { at, item, topics, type, w?, skill?, d?, perf? }
@@ -109,6 +112,9 @@ function merge(base, data) {
     mistakes: Array.isArray(data.mistakes) ? data.mistakes : [],
     calls: Array.isArray(data.calls) ? data.calls : [],
     listening: isObj(data.listening) ? data.listening : {},
+    shadowing: isObj(data.shadowing) ? data.shadowing : {},
+    videos: Array.isArray(data.videos) ? data.videos.filter((v) => isObj(v) && typeof v.id === 'string') : [],
+    phrases: isObj(data.phrases) ? data.phrases : {},
     drills: Array.isArray(data.drills) ? data.drills : [],
     reports: Array.isArray(data.reports) ? data.reports : [],
     events: Array.isArray(data.events) ? data.events.filter(isObj) : [],
@@ -329,7 +335,7 @@ export function validateBackup(data) {
   if (!isObj(data.days)) bad('no days');
   if (Object.values(data.days).some((d) => !isObj(d))) bad('bad day entry');
   for (const k of ['mistakes', 'calls', 'drills', 'reports', 'events']) if (data[k] !== undefined && !Array.isArray(data[k])) bad(`${k} is not a list`);
-  for (const k of ['settings', 'listening']) if (data[k] !== undefined && !isObj(data[k])) bad(`bad ${k}`);
+  for (const k of ['settings', 'listening', 'shadowing', 'phrases']) if (data[k] !== undefined && !isObj(data[k])) bad(`bad ${k}`);
   if (data.settings?.plan !== undefined && !isObj(data.settings.plan)) bad('bad plan');
   if (data.settings?.readDays !== undefined && !Array.isArray(data.settings.readDays)) bad('bad reading days');
   return data;
@@ -476,3 +482,22 @@ export function recentRating(item) {
 }
 
 export function setPicks(p) { state.picks = p; save(); }
+
+// ---- shadowing and videos ----
+/** Record one shadowing attempt: `key` is a clip id or 'yt:<videoId>', `i` the sentence or phrase. */
+export function logShadow(key, i, score) {
+  const r = (state.shadowing[key] ||= { tries: 0, last: 0, best: {} });
+  r.tries++; r.last = Date.now();
+  if (Number.isFinite(score)) r.best[i] = Math.max(r.best[i] || 0, Math.round(score));
+  save();
+}
+export function addVideo(v) {
+  if (state.videos.some((x) => x.id === v.id)) return false;
+  state.videos.unshift({ id: v.id, title: v.title || '', addedAt: Date.now() });
+  save(); return true;
+}
+export function removeVideo(id) { state.videos = state.videos.filter((v) => v.id !== id); delete state.phrases[id]; save(); }
+export function setPhrases(id, list) {
+  if (list.length) state.phrases[id] = list; else delete state.phrases[id];
+  save();
+}
