@@ -2,6 +2,8 @@ import * as store from './store.js';
 import { SKILLS } from './store.js';
 import { lang } from './languages.js';
 import * as coachViews from './coachviews.js';
+import * as listen from './listen.js';
+import * as review from './review.js';
 
 const L = () => lang(store.get().settings.language);
 
@@ -144,13 +146,6 @@ function sectionPage(skill, intro, comingSoon, interim) {
   </div>`;
 }
 
-const viewListen = () => sectionPage('listen',
-  `Understand real ${L().name} at natural speed, even when you're not fully concentrating.`,
-  ['Clips with different voices, accents and speeds, from slow to fast native speech.',
-    'Dictation and comprehension questions, with the transcript revealed only after you answer.',
-    '"Distracted mode" with café and street noise in the background.'],
-  `<p>Run the timer while you watch or listen to ${L().name} content. Choose something slightly too fast for you, and avoid English subtitles.</p>`);
-
 function viewProgress() {
   const s = store.get();
   const keys = Object.keys(s.days);
@@ -191,6 +186,7 @@ function viewProgress() {
     <div class="heatmap">${cells.join('')}</div>
     <p class="legend muted"><span class="hm l0"></span> none <span class="hm l2"></span> some <span class="hm l4"></span> full goal</p>
   </div>
+  ${review.trendsCard()}
   ${coachViews.usageCard()}
   <div class="card">
     <h3>Time per skill</h3>
@@ -250,16 +246,17 @@ function viewSettings() {
     <h3>Reset</h3>
     <button class="btn btn-danger" data-action="reset">Delete all progress</button>
   </div>
-  <p class="muted center small">Lang Hub · step 2 of 4</p>`;
+  <p class="muted center small">Lang Hub · all 4 steps</p>`;
 }
 
 // ---------- router ----------
 const routes = {
-  today: viewToday, listen: viewListen, progress: viewProgress, settings: viewSettings,
+  today: viewToday, listen: listen.viewListen, progress: viewProgress, settings: viewSettings,
   speak: coachViews.viewSpeak, read: coachViews.viewRead, review: coachViews.viewReview,
   cards: coachViews.viewCards, call: coachViews.viewCall, recap: coachViews.viewRecap,
+  drill: review.viewDrill, report: review.viewReport,
 };
-const TAB_OF = { cards: 'speak', call: null, recap: null };
+const TAB_OF = { cards: 'speak', call: null, recap: null, drill: 'review', report: 'progress' };
 
 function currentRoute() {
   const [r, ...params] = (location.hash.replace(/^#\/?/, '') || 'today').split('?')[0].split('/');
@@ -275,8 +272,13 @@ function render() {
   document.body.classList.toggle('in-call', r === 'call');
   bindView(r);
   coachViews.bind(r, params);
+  listen.bind(r, params);
+  review.bind(r, params);
 }
 coachViews.init({ render, toast, blockCard, sectionPage, L, esc, mmss });
+listen.init({ render, toast, blockCard, L, esc, mmss });
+review.init({ render, toast, L, esc });
+coachViews.setReview(review);
 
 window.addEventListener('hashchange', () => { render(); view.focus({ preventScroll: true }); window.scrollTo(0, 0); });
 

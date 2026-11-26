@@ -27,6 +27,9 @@ const DEFAULTS = {
   timer: null,  // { skill, startedAt (ms epoch) } while a timer runs
   mistakes: [], // { id, at, said, correct, explanation, category, source }
   calls: [],    // { at, mode, title, seconds, mistakes }
+  listening: {}, // clipId -> { best, dict, tries, last }
+  drills: [],   // { at, cards, right, seconds }
+  reports: [],  // { at, days, cats: { category: rate } }
 };
 
 let state = load();
@@ -48,10 +51,13 @@ function merge(base, data) {
     days: data.days || {},
     mistakes: Array.isArray(data.mistakes) ? data.mistakes : [],
     calls: Array.isArray(data.calls) ? data.calls : [],
+    listening: data.listening && typeof data.listening === 'object' ? data.listening : {},
+    drills: Array.isArray(data.drills) ? data.drills : [],
+    reports: Array.isArray(data.reports) ? data.reports : [],
   };
 }
 
-function save() {
+export function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
   listeners.forEach((fn) => fn(state));
 }
@@ -205,4 +211,10 @@ const SECRET_KEY = 'langhub.secret';
 export function getApiKey() { try { return localStorage.getItem(SECRET_KEY) || ''; } catch (e) { return ''; } }
 export function setApiKey(v) {
   try { v ? localStorage.setItem(SECRET_KEY, v.trim()) : localStorage.removeItem(SECRET_KEY); } catch (e) { /* ignore */ }
+}
+
+export function logDrill(d) {
+  state.drills.unshift({ at: Date.now(), ...d });
+  if (state.drills.length > 1000) state.drills.length = 1000;
+  save();
 }
