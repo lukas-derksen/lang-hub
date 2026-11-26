@@ -257,3 +257,23 @@ details ol { padding-left: 1.2em; margin: 0 0 12px; }
 .flashcard-text { font-size: 1.3rem; font-weight: 700; line-height: 1.35; margin: 8px 0 14px; }
 body.in-call .tabbar { display: none; }
 @media (prefers-reduced-motion: reduce) { .orb { animation: none !important; } }
+
+/* ---- listening ---- */
+.player input[type=range] { width: 100%; accent-color: var(--accent); margin: 10px 0 4px; }
+.player-main { align-items: center; }
+.play-btn { min-width: 110px; }
+.chips { margin: 8px 0; }
+.chip { font: inherit; font-weight: 600; font-size: .9rem; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; }
+.chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.toggle { display: flex; gap: 10px; align-items: center; margin: 10px 0; cursor: pointer; }
+.toggle input { width: 20px; height: 20px; accent-color: var(--accent); }
+.q { border: 0; padding: 0; margin: 0 0 14px; }
+.q legend { font-weight: 600; margin-bottom: 6px; }
+.opt { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 6px; cursor: pointer; }
+.opt input { accent-color: var(--accent); }
+.opt.right { border-color: var(--accent); background: var(--accent-soft); }
+.opt.wrong { border-color: var(--red); background: var(--red-soft); }
+textarea { width: 100%; font: inherit; font-size: 1.05rem; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 10px; resize: vertical; }
+.dict { font-size: 1.05rem; line-height: 1.7; }
+mark { background: var(--red-soft); color: var(--red); border-radius: 4px; padding: 0 3px; }
+.done { color: var(--accent); font-weight: 600; }
