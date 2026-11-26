@@ -22,10 +22,10 @@ export const CATEGORY = {
 const catLabel = (c) => (CATEGORY[c] ? `${CATEGORY[c].label} · ${CATEGORY[c].it}` : c);
 
 // ---------- scheduling (simple SM-2 style) ----------
-const isDue = (m, now = Date.now()) => !m.srs || m.srs.due <= now;
+export const isDue = (m, now = Date.now()) => !m.srs || m.srs.due <= now;
 export const dueCount = () => store.get().mistakes.filter((m) => isDue(m)).length;
 
-function grade(m, g) { // g: 0 again, 1 hard, 2 good, 3 easy
+export function grade(m, g) { // g: 0 again, 1 hard, 2 good, 3 easy
   const s = m.srs || { interval: 0, ease: 2.5, reps: 0, lapses: 0, history: [] };
   if (g === 0) { s.lapses++; s.reps = 0; s.interval = 0; s.ease = Math.max(1.3, s.ease - 0.2); }
   else {
