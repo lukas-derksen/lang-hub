@@ -9,11 +9,19 @@ export function fnv1a(str: string): string {
   return (h >>> 0).toString(16).padStart(8, '0');
 }
 
+/**
+ * Hash of what a segment sounds like: its text, the model and the voice settings.
+ * Same input as segHash in js/listen.js; the app puts it in the audio URL
+ * (/api/audio/{clipId}/{i}/{hash}) so it never caches audio for text that changed.
+ */
+export const segHash = (text: string, model: string) => fnv1a(`${text}\u0000${model}\u0000${JSON.stringify(VOICE_SETTINGS)}`);
+
 export const audioKey = (clipId: string, i: number, voiceId: string, text: string, model: string) =>
-  `audio:${clipId}:${i}:${voiceId}:${fnv1a(`${text}\u0000${model}\u0000${JSON.stringify(VOICE_SETTINGS)}`)}`;
+  `audio:${clipId}:${i}:${voiceId}:${segHash(text, model)}`;
 
 export class TtsError extends Error {
-  constructor(message: string, readonly status: number) { super(message); }
+  readonly status: number;
+  constructor(message: string, status: number) { super(message); this.status = status; }
 }
 
 export async function voice(apiKey: string, voiceId: string, text: string, model: string): Promise<ArrayBuffer> {

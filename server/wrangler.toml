@@ -20,6 +20,9 @@ SCENES_PER_WEEK = "1"
 CARD_BATCHES_PER_WEEK = "1"
 # Most ElevenLabs characters the server voices per calendar month (about 1 credit each).
 TTS_MONTHLY_CHARS = "25000"
+# Most Claude tokens per calendar month; writing stops (with a clear error) once either is used up.
+CLAUDE_MONTHLY_INPUT_TOKENS = "2000000"
+CLAUDE_MONTHLY_OUTPUT_TOKENS = "300000"
 
 # Every day at 04:30 UTC: top up new content where you're running low.
 [triggers]
